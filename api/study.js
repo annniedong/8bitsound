@@ -14,12 +14,17 @@ async function fbPut(path, data) {
   });
 }
 
-// Firebase strips null values, so we store results as a keyed object
-// and reconstruct the 3-element array on read.
+// Firebase strips null values, so we store results as keyed objects
+// and reconstruct 3-element arrays on read.
 function normalize(p) {
   if (!p) return null;
-  const r = p.results || {};
-  return { ...p, results: [r[0] || null, r[1] || null, r[2] || null] };
+  const r  = p.results   || {};
+  const r2 = p.p2results || {};
+  return {
+    ...p,
+    results:   [r[0]  || null, r[1]  || null, r[2]  || null],
+    p2results: [r2[0] || null, r2[1] || null, r2[2] || null],
+  };
 }
 
 function shuffle(arr) {
@@ -35,6 +40,12 @@ function generateAssignments() {
   const tasks  = shuffle([0, 1, 2]);
   const levels = shuffle([1, 2, 3]);
   return tasks.map((task, i) => ({ task, level: levels[i] }));
+}
+
+function generateP2Assignments() {
+  const tasks     = shuffle([0, 1, 2]);
+  const paramSets = shuffle(['full', 'reduced', 'minimal']);
+  return tasks.map((task, i) => ({ task, paramSet: paramSets[i] }));
 }
 
 module.exports = async function handler(req, res) {
@@ -60,12 +71,22 @@ module.exports = async function handler(req, res) {
       if (action === 'init') {
         if (!id) return res.status(400).json({ error: 'Missing id' });
         const existing = await fbGet(`participants/${id}`);
-        if (existing) return res.json(normalize(existing));
+        if (existing) {
+          // Backfill p2assignments for participants created before Part 2 was added
+          if (!existing.p2assignments) {
+            existing.p2assignments = generateP2Assignments();
+            existing.p2results = existing.p2results || {};
+            await fbPut(`participants/${id}`, existing);
+          }
+          return res.json(normalize(existing));
+        }
         const participant = {
           id,
           createdAt: new Date().toISOString(),
-          assignments: generateAssignments(),
-          results: {},  // keyed object avoids Firebase null-stripping
+          assignments:   generateAssignments(),
+          results:       {},  // keyed object avoids Firebase null-stripping
+          p2assignments: generateP2Assignments(),
+          p2results:     {},
         };
         await fbPut(`participants/${id}`, participant);
         return res.json(normalize(participant));
@@ -77,6 +98,16 @@ module.exports = async function handler(req, res) {
         if (!participant) return res.status(404).json({ error: 'Participant not found' });
         if (!participant.results) participant.results = {};
         participant.results[taskIndex] = { ...result, completedAt: new Date().toISOString() };
+        await fbPut(`participants/${id}`, participant);
+        return res.json({ ok: true });
+      }
+
+      if (action === 'result2') {
+        if (!id) return res.status(400).json({ error: 'Missing id' });
+        const participant = await fbGet(`participants/${id}`);
+        if (!participant) return res.status(404).json({ error: 'Participant not found' });
+        if (!participant.p2results) participant.p2results = {};
+        participant.p2results[taskIndex] = { ...result, completedAt: new Date().toISOString() };
         await fbPut(`participants/${id}`, participant);
         return res.json({ ok: true });
       }

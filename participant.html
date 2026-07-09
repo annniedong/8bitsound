@@ -10,7 +10,7 @@
 <script src="riffwave.js"></script>
 <script src="sfxr.js"></script>
 <script>
-// ── Study constants ───────────────────────────────────────────────────────────
+// ── Part 1 constants ──────────────────────────────────────────────────────────
 const TASKS = [
   "Make the sound of stepping through a portal into an unknown dimension",
   "Make the sound of a memory being erased from someone's mind",
@@ -24,9 +24,23 @@ const LEVEL_TOOLS = {
   3: ["AI assistant — describe the sound you want in plain English", "Manual sliders to refine the result", "Iterate: chat back and forth with the AI"]
 };
 
+// ── Part 2 constants ──────────────────────────────────────────────────────────
+const P2_TASKS = [
+  "Make the sound of something invisible walking past you",
+  "Make the sound of a coin falling through an infinite well",
+  "Make the sound of an instrument from the future"
+];
+const P2_TASK_SHORT = ["Invisible Walker", "Infinite Well", "Future Instrument"];
+const PARAM_SET_NAMES = { full: "FULL CONTROLS", reduced: "REDUCED CONTROLS", minimal: "MINIMAL CONTROLS" };
+const PARAM_SET_TOOLS = {
+  full:    ["All parameter sliders available", "AI assistant active", "Iterate freely with the full design space"],
+  reduced: ["Core parameters: Envelope, Frequency, Filters", "Advanced effects hidden (Vibrato, Arp, Duty, Flanger…)", "AI assistant active"],
+  minimal: ["Envelope only (Attack, Sustain, Punch, Decay)", "All other controls hidden", "AI assistant active"]
+};
+
 // ── Study state ───────────────────────────────────────────────────────────────
 let LEVEL = 1;
-let study = { pid: null, data: null, step: 0, phase: 'init', timer: 180, timerInterval: null };
+let study = { pid: null, data: null, step: 0, part: 1, p2step: 0, phase: 'init', timer: 180, timerInterval: null };
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 function initTheme() {
@@ -225,11 +239,41 @@ function generateAssignments() {
   return taskOrder.map((task, i) => ({ task, level: levelOrder[i] }));
 }
 
+function generateP2Assignments() {
+  const taskOrder  = shuffle([0, 1, 2]);
+  const paramSets  = shuffle(['full', 'reduced', 'minimal']);
+  return taskOrder.map((task, i) => ({ task, paramSet: paramSets[i] }));
+}
+
 function genPid() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let s = 'P';
   for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)];
   return s;
+}
+
+function setLevel(level) {
+  LEVEL = level;
+  document.documentElement.dataset.level = level;
+  const presetsPanel = document.getElementById('presetsPanel');
+  const chatPanel    = document.getElementById('chatPanel');
+  const leftPanel    = document.getElementById('leftPanel');
+
+  if (level === 1) {
+    leftPanel.style.display    = 'none';
+  } else if (level === 2) {
+    leftPanel.style.display    = '';
+    presetsPanel.style.display = 'block';
+    chatPanel.style.display    = 'none';
+  } else {
+    leftPanel.style.display    = '';
+    presetsPanel.style.display = 'none';
+    chatPanel.style.display    = 'flex';
+  }
+}
+
+function setParamSet(paramSet) {
+  document.documentElement.dataset.paramSet = paramSet || 'full';
 }
 
 async function initStudy() {
@@ -270,69 +314,96 @@ async function initStudy() {
       study.data = {
         id: study.pid,
         createdAt: new Date().toISOString(),
-        assignments: generateAssignments(),
-        results: [null, null, null],
+        assignments:   generateAssignments(),
+        results:       [null, null, null],
+        p2assignments: generateP2Assignments(),
+        p2results:     [null, null, null],
       };
       localStorage.setItem(lsKey, JSON.stringify(study.data));
     }
   }
 
-  // Find starting step (first null result); guard against missing field
+  // Guard against Firebase null-stripping: normalize results arrays
   const results = study.data.results || [null, null, null];
   study.data.results = results;
-  study.step = results.findIndex(r => r === null);
-  if (study.step === -1) { showComplete(); return; }
+  const p2results = study.data.p2results || [null, null, null];
+  study.data.p2results = p2results;
+  if (!study.data.p2assignments) {
+    study.data.p2assignments = generateP2Assignments();
+  }
 
   document.getElementById('loadingOverlay').style.display = 'none';
-  setLevel(study.data.assignments[study.step].level);
+
+  // Determine where in the study we are
+  study.step = results.findIndex(r => r === null);
+  if (study.step !== -1) {
+    study.part = 1;
+    setLevel(study.data.assignments[study.step].level);
+    showPopup();
+    return;
+  }
+
+  // Part 1 complete – start or resume Part 2
+  study.part = 2;
+  study.p2step = p2results.findIndex(r => r === null);
+  if (study.p2step === -1) {
+    showFinalComplete();
+    return;
+  }
+  setLevel(3);
   showPopup();
 }
 
-function setLevel(level) {
-  LEVEL = level;
-  document.documentElement.dataset.level = level;
-  const presetsPanel = document.getElementById('presetsPanel');
-  const chatPanel    = document.getElementById('chatPanel');
-  const leftPanel    = document.getElementById('leftPanel');
-
-  if (level === 1) {
-    leftPanel.style.display    = 'none';
-  } else if (level === 2) {
-    leftPanel.style.display    = '';
-    presetsPanel.style.display = 'block';
-    chatPanel.style.display    = 'none';
-  } else {
-    leftPanel.style.display    = '';
-    presetsPanel.style.display = 'none';
-    chatPanel.style.display    = 'flex';
-  }
-}
-
 function showPopup() {
-  const assignment = study.data.assignments[study.step];
-  const taskIdx    = assignment.task;
-  const level      = assignment.level;
-  const stepNum    = study.step + 1;
-
-  document.getElementById('popupStep').textContent    = `TASK ${stepNum} OF 3`;
-  document.getElementById('popupTask').textContent    = TASKS[taskIdx];
-  document.getElementById('popupLevel').textContent   = LEVEL_NAMES[level];
-  const toolsList = document.getElementById('popupTools');
-  toolsList.innerHTML = '';
-  LEVEL_TOOLS[level].forEach(t => {
-    const li = document.createElement('li');
-    li.textContent = t;
-    toolsList.appendChild(li);
-  });
+  if (study.part === 1) {
+    const a       = study.data.assignments[study.step];
+    const stepNum = study.step + 1;
+    document.getElementById('popupStep').textContent  = `PART 1 — TASK ${stepNum} OF 3`;
+    document.getElementById('popupTask').textContent  = TASKS[a.task];
+    document.getElementById('popupLevel').textContent = LEVEL_NAMES[a.level];
+    document.getElementById('popupParamNote').style.display = 'none';
+    const toolsList = document.getElementById('popupTools');
+    toolsList.innerHTML = '';
+    LEVEL_TOOLS[a.level].forEach(t => {
+      const li = document.createElement('li');
+      li.textContent = t;
+      toolsList.appendChild(li);
+    });
+  } else {
+    const a2      = study.data.p2assignments[study.p2step];
+    const stepNum = study.p2step + 1;
+    document.getElementById('popupStep').textContent  = `PART 2 — TASK ${stepNum} OF 3`;
+    document.getElementById('popupTask').textContent  = P2_TASKS[a2.task];
+    document.getElementById('popupLevel').textContent = 'LEVEL 3 — AI ASSISTANT';
+    const paramNote = document.getElementById('popupParamNote');
+    paramNote.textContent = `Parameter set: ${PARAM_SET_NAMES[a2.paramSet]}`;
+    paramNote.style.display = 'block';
+    const toolsList = document.getElementById('popupTools');
+    toolsList.innerHTML = '';
+    PARAM_SET_TOOLS[a2.paramSet].forEach(t => {
+      const li = document.createElement('li');
+      li.textContent = t;
+      toolsList.appendChild(li);
+    });
+  }
   document.getElementById('studyPopup').style.display = 'flex';
 }
 
 function startTask() {
   document.getElementById('studyPopup').style.display = 'none';
 
-  const assignment = study.data.assignments[study.step];
-  document.getElementById('hudStep').textContent  = `TASK ${study.step + 1}/3`;
-  document.getElementById('hudTask').textContent  = TASK_SHORT[assignment.task];
+  if (study.part === 1) {
+    const a = study.data.assignments[study.step];
+    document.getElementById('hudStep').textContent = `P1 — TASK ${study.step + 1}/3`;
+    document.getElementById('hudTask').textContent = TASK_SHORT[a.task];
+    setParamSet('full');
+  } else {
+    const a2 = study.data.p2assignments[study.p2step];
+    document.getElementById('hudStep').textContent = `P2 — TASK ${study.p2step + 1}/3`;
+    document.getElementById('hudTask').textContent = P2_TASK_SHORT[a2.task];
+    setParamSet(a2.paramSet);
+  }
+
   document.getElementById('studyHud').style.display = 'block';
 
   if (LEVEL === 3) {
@@ -378,37 +449,76 @@ async function finishTask(timedOut) {
   const params = PARAMS ? JSON.parse(JSON.stringify(PARAMS)) : {};
   const result = { b58, params, timedOut };
 
-  // Save to localStorage backup
-  study.data.results[study.step] = { ...result, completedAt: new Date().toISOString() };
-  localStorage.setItem(`sfx-study-${study.pid}`, JSON.stringify(study.data));
+  if (study.part === 1) {
+    study.data.results[study.step] = { ...result, completedAt: new Date().toISOString() };
+    localStorage.setItem(`sfx-study-${study.pid}`, JSON.stringify(study.data));
+    try {
+      await fetch(window.STUDY_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'result', id: study.pid, taskIndex: study.step, result }),
+      });
+    } catch (e) {}
 
-  // Try API save
-  try {
-    await fetch(window.STUDY_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'result', id: study.pid, taskIndex: study.step, result }),
-    });
-  } catch (e) { /* localStorage backup covers this */ }
+    const stepNum = study.step + 1;
+    document.getElementById('doneStep').textContent    = `TASK ${stepNum} COMPLETE`;
+    document.getElementById('doneNextBtn').textContent = study.step >= 2 ? '▶ CONTINUE TO PART 2' : '▶ NEXT TASK';
+  } else {
+    study.data.p2results[study.p2step] = { ...result, completedAt: new Date().toISOString() };
+    localStorage.setItem(`sfx-study-${study.pid}`, JSON.stringify(study.data));
+    try {
+      await fetch(window.STUDY_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'result2', id: study.pid, taskIndex: study.p2step, result }),
+      });
+    } catch (e) {}
 
-  // Show done modal
-  const stepNum  = study.step + 1;
-  const isLast   = study.step >= 2;
-  document.getElementById('doneStep').textContent  = `TASK ${stepNum} COMPLETE`;
-  document.getElementById('doneNextBtn').textContent = isLast ? '✓ FINISH STUDY' : '▶ NEXT TASK';
+    const stepNum = study.p2step + 1;
+    document.getElementById('doneStep').textContent    = `P2 TASK ${stepNum} COMPLETE`;
+    document.getElementById('doneNextBtn').textContent = study.p2step >= 2 ? '✓ FINISH STUDY' : '▶ NEXT TASK';
+  }
+
   document.getElementById('taskDoneModal').style.display = 'flex';
 }
 
 function nextTask() {
   document.getElementById('taskDoneModal').style.display = 'none';
   document.body.classList.remove('study-locked');
-  study.step++;
-  if (study.step >= 3) { showComplete(); return; }
-  setLevel(study.data.assignments[study.step].level);
+
+  if (study.part === 1) {
+    study.step++;
+    if (study.step >= 3) {
+      showP1Complete();
+      return;
+    }
+    setLevel(study.data.assignments[study.step].level);
+    showPopup();
+  } else {
+    study.p2step++;
+    if (study.p2step >= 3) {
+      showFinalComplete();
+      return;
+    }
+    showPopup();
+  }
+}
+
+function showP1Complete() {
+  document.getElementById('studyHud').style.display = 'none';
+  setParamSet('full');
+  document.getElementById('p1CompleteModal').style.display = 'flex';
+}
+
+function startP2() {
+  study.part   = 2;
+  study.p2step = 0;
+  document.getElementById('p1CompleteModal').style.display = 'none';
+  setLevel(3);
   showPopup();
 }
 
-function showComplete() {
+function showFinalComplete() {
   document.getElementById('studyHud').style.display      = 'none';
   document.getElementById('completePid').textContent     = study.pid;
   document.getElementById('studyComplete').style.display = 'flex';
@@ -711,6 +821,22 @@ input[type="range"]:disabled::-moz-range-thumb     { background: var(--color-tex
 
 #copybuffer { position: fixed; top: -9999px; left: -9999px; opacity: 0; pointer-events: none; }
 
+/* ── Part 2 param-set visibility restrictions ─────────────────────────────── */
+html[data-param-set="reduced"] #fs-vibrato,
+html[data-param-set="reduced"] #fs-arp,
+html[data-param-set="reduced"] #fs-duty,
+html[data-param-set="reduced"] #fs-retrigger,
+html[data-param-set="reduced"] #fs-flanger { display: none; }
+
+html[data-param-set="minimal"] #fs-frequency,
+html[data-param-set="minimal"] #fs-vibrato,
+html[data-param-set="minimal"] #fs-arp,
+html[data-param-set="minimal"] #fs-duty,
+html[data-param-set="minimal"] #fs-retrigger,
+html[data-param-set="minimal"] #fs-flanger,
+html[data-param-set="minimal"] #fs-lpf,
+html[data-param-set="minimal"] #fs-hpf { display: none; }
+
 /* ── Study overlay styles ─────────────────────────────────────────────────── */
 .study-overlay {
   position: fixed; inset: 0;
@@ -942,51 +1068,51 @@ body.study-locked .play-btn { pointer-events: auto !important; opacity: 1 !impor
       <input type="radio" id="noise"    value="3" name="shape" />
       <label for="noise">NOI</label>
     </div>
-    <fieldset>
+    <fieldset id="fs-envelope">
       <legend>Envelope</legend>
       <input class="slider" id="p_env_attack"  data-title="Attack"  />
       <input class="slider" id="p_env_sustain" data-title="Sustain" />
       <input class="slider" id="p_env_punch"   data-title="Punch"   />
       <input class="slider" id="p_env_decay"   data-title="Decay"   />
     </fieldset>
-    <fieldset>
+    <fieldset id="fs-frequency">
       <legend>Frequency</legend>
       <input class="slider"        id="p_base_freq"  data-title="Start Freq" />
       <input class="slider"        id="p_freq_limit" data-title="Min Cutoff" />
       <input class="slider signed" id="p_freq_ramp"  data-title="Slide"      />
       <input class="slider signed" id="p_freq_dramp" data-title="Δ Slide"    />
     </fieldset>
-    <fieldset>
+    <fieldset id="fs-vibrato">
       <legend>Vibrato</legend>
       <input class="slider" id="p_vib_strength" data-title="Depth" />
       <input class="slider" id="p_vib_speed"    data-title="Speed" />
     </fieldset>
-    <fieldset>
+    <fieldset id="fs-arp">
       <legend>Arpeggiation</legend>
       <input class="slider signed" id="p_arp_mod"   data-title="Freq Mult" />
       <input class="slider"        id="p_arp_speed"  data-title="Speed"     />
     </fieldset>
-    <fieldset>
+    <fieldset id="fs-duty">
       <legend>Duty Cycle</legend>
       <input class="slider"        id="p_duty"      data-title="Duty"  />
       <input class="slider signed" id="p_duty_ramp" data-title="Sweep" />
     </fieldset>
-    <fieldset>
+    <fieldset id="fs-retrigger">
       <legend>Retrigger</legend>
       <input class="slider" id="p_repeat_speed" data-title="Rate" />
     </fieldset>
-    <fieldset>
+    <fieldset id="fs-flanger">
       <legend>Flanger</legend>
       <input class="slider signed" id="p_pha_offset" data-title="Offset" />
       <input class="slider signed" id="p_pha_ramp"   data-title="Sweep"  />
     </fieldset>
-    <fieldset>
+    <fieldset id="fs-lpf">
       <legend>Lo-Pass Filter</legend>
       <input class="slider"        id="p_lpf_freq"      data-title="Cutoff"    />
       <input class="slider signed" id="p_lpf_ramp"      data-title="Sweep"     />
       <input class="slider"        id="p_lpf_resonance" data-title="Resonance" />
     </fieldset>
-    <fieldset>
+    <fieldset id="fs-hpf">
       <legend>Hi-Pass Filter</legend>
       <input class="slider"        id="p_hpf_freq" data-title="Cutoff" />
       <input class="slider signed" id="p_hpf_ramp" data-title="Sweep"  />
@@ -1038,7 +1164,7 @@ body.study-locked .play-btn { pointer-events: auto !important; opacity: 1 !impor
     ID: <span id="hudPid">—</span>
     <button class="hud-edit-btn" onclick="editPid()" title="Edit participant ID">✎</button>
   </div>
-  <div class="hud-step" id="hudStep">TASK 1/3</div>
+  <div class="hud-step" id="hudStep">P1 — TASK 1/3</div>
   <div class="hud-task-name" id="hudTask">—</div>
   <div class="hud-timer" id="hudTimer">3:00</div>
   <button class="hud-early-btn" onclick="submitEarly()">Submit Early</button>
@@ -1047,12 +1173,13 @@ body.study-locked .play-btn { pointer-events: auto !important; opacity: 1 !impor
 <!-- ── Task popup ────────────────────────────────────────────────────────────── -->
 <div class="study-overlay" id="studyPopup" style="display:none">
   <div class="study-box">
-    <h2 id="popupStep">TASK 1 OF 3</h2>
+    <h2 id="popupStep">PART 1 — TASK 1 OF 3</h2>
     <h3>YOUR TASK</h3>
     <p id="popupTask"></p>
     <h3>YOUR TOOLS</h3>
     <p id="popupLevel" style="font-family:var(--font-pixel);font-size:7px;color:var(--color-accent);letter-spacing:2px;margin-bottom:8px;"></p>
     <ul id="popupTools"></ul>
+    <p id="popupParamNote" class="time-note" style="color:var(--color-info);display:none;"></p>
     <p class="time-note">⏱ You have 3 minutes. Your sound locks when time runs out.</p>
     <button class="study-btn" onclick="startTask()">▶ START TASK</button>
   </div>
@@ -1067,11 +1194,27 @@ body.study-locked .play-btn { pointer-events: auto !important; opacity: 1 !impor
   </div>
 </div>
 
+<!-- ── Part 1 complete / Part 2 intro ───────────────────────────────────────── -->
+<div class="study-overlay" id="p1CompleteModal" style="display:none">
+  <div class="study-box">
+    <h2>PART 1 COMPLETE!</h2>
+    <p style="font-size:22px;margin:16px 0;">All 3 tasks done.<br>Get ready for Part 2.</p>
+    <h3>WHAT'S DIFFERENT IN PART 2</h3>
+    <ul>
+      <li>3 new sound design challenges</li>
+      <li>AI assistant available for all tasks</li>
+      <li>Each task limits which controls you can see</li>
+    </ul>
+    <p class="time-note">⏱ Same rules: 3 minutes per task.</p>
+    <button class="study-btn" onclick="startP2()">▶ START PART 2</button>
+  </div>
+</div>
+
 <!-- ── Study complete ────────────────────────────────────────────────────────── -->
 <div class="study-overlay" id="studyComplete" style="display:none">
   <div class="study-box" style="text-align:center">
     <h2>STUDY COMPLETE!</h2>
-    <p style="font-size:22px;margin:16px 0;">All 3 tasks finished.<br>Thank you!</p>
+    <p style="font-size:22px;margin:16px 0;">All 6 tasks finished.<br>Thank you!</p>
     <p style="font-family:var(--font-pixel);font-size:7px;color:var(--color-text-dim);letter-spacing:2px;margin-top:16px;">
       PARTICIPANT ID: <span id="completePid" style="color:var(--color-accent)"></span>
     </p>
