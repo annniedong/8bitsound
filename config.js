@@ -1,4 +1,5 @@
-// SFX Studio — Backend Configuration
-// After deploying to Vercel, replace the URL below with your Vercel deployment URL.
-// This is safe to commit — the API key lives in Vercel, not here.
-window.CHAT_API_URL = 'https://your-vercel-app.vercel.app/api/chat';
+// On localhost the express server handles /api/chat directly.
+// For production (GitHub Pages), set this to your Vercel deployment URL.
+window.CHAT_API_URL = location.hostname === 'localhost'
+  ? '/api/chat'
+  : 'https://8bitsound.vercel.app/api/chat';
