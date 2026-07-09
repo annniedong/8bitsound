@@ -24,6 +24,26 @@ function getSecret() { return sessionStorage.getItem('sfx-admin-secret'); }
 function setSecret(s) { sessionStorage.setItem('sfx-admin-secret', s); }
 function clearSecret() { sessionStorage.removeItem('sfx-admin-secret'); location.reload(); }
 
+async function addParticipant() {
+  const pid = prompt('Participant ID (leave blank to auto-generate):');
+  if (pid === null) return; // cancelled
+  const id = pid.trim().toUpperCase() || 'P' + Math.random().toString(36).slice(2,6).toUpperCase();
+  const secret = getSecret();
+  try {
+    const res = await fetch(window.STUDY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'init', id, secret }),
+    });
+    const data = await res.json();
+    if (data.error) { alert('Error: ' + data.error); return; }
+    await fetchData();
+    alert('Created participant ' + data.id + '\nParticipant link:\n' + location.origin + '/participant.html?pid=' + encodeURIComponent(data.id));
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
 async function fetchData() {
   const secret = getSecret();
   if (!secret) return;
@@ -449,6 +469,7 @@ tr.detail-row td { padding: 0; background: var(--color-surface-2); border-bottom
         <div id="lastUpdated" class="dash-meta">Loading…</div>
       </div>
       <div class="btn-row">
+        <button class="px-btn" onclick="addParticipant()">+ NEW PARTICIPANT</button>
         <button class="px-btn" onclick="fetchData()">↺ REFRESH</button>
         <button class="px-btn" onclick="downloadCSV()">↓ CSV</button>
         <button class="px-btn" onclick="downloadJSON()">↓ JSON</button>
