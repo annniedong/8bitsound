@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SFX Study</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="riffwave.js"></script>
+<script src="sfxr.js"></script>
+<script>
+// ── Study constants ───────────────────────────────────────────────────────────
+const TASKS = [
+  "Make the sound of stepping through a portal into an unknown dimension",
+  "Make the sound of a memory being erased from someone's mind",
+  "Make the sound of a small creature discovering a new element"
+];
+const TASK_SHORT = ["Portal", "Memory Erasure", "New Element"];
+const LEVEL_NAMES = { 1: "LEVEL 1 — MANUAL ONLY", 2: "LEVEL 2 — PRESETS + MANUAL", 3: "LEVEL 3 — AI ASSISTANT" };
+const LEVEL_TOOLS = {
+  1: ["Manual sliders only — craft your sound from scratch", "Wave shape selector (Square, Sawtooth, Sine, Noise)", "Full envelope, frequency, filter, and effect controls"],
+  2: ["Preset buttons — jump-start with a sound type", "Mutate — randomize from the current sound", "Manual sliders to refine any parameter"],
+  3: ["AI assistant — describe the sound you want in plain English", "Manual sliders to refine the result", "Iterate: chat back and forth with the AI"]
+};
+
+// ── Study state ───────────────────────────────────────────────────────────────
+let LEVEL = 1;
+let study = { pid: null, data: null, step: 0, phase: 'init', timer: 180, timerInterval: null };
+
+// ── Theme ─────────────────────────────────────────────────────────────────────
+function initTheme() {
+  const saved = localStorage.getItem('sfx-theme');
+  const pref  = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  document.documentElement.dataset.theme = saved || pref;
+}
+
+function toggleTheme() {
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('sfx-theme', next);
+  if (SOUND) updateWaveform(SOUND.buffer);
+}
+
+// ── SFXR globals ──────────────────────────────────────────────────────────────
+let SOUND, PARAMS;
+let wav, json, copyBuffer, share, file_size, num_samples, clipping, canvas, canvasW, canvasH;
+
+const SOUND_VOL = 0.25;
+let SAMPLE_RATE = 44100;
+let SAMPLE_SIZE = 8;
+
+function getThemeColor(prop) {
+  return getComputedStyle(document.documentElement).getPropertyValue(prop).trim();
+}
+
+function updateWaveform(data) {
+  if (!canvas || !data) return;
+  canvasW = canvas.clientWidth;
+  canvasH = canvas.clientHeight;
+  if (!canvasW || !canvasH) return;
+  canvas.width  = canvasW;
+  canvas.height = canvasH;
+  let min = 1, max = -1;
+  data.forEach(v => { if (v < min) min = v; if (v > max) max = v; });
+  const a = max - min || 1;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvasW, canvasH);
+  ctx.strokeStyle = getThemeColor('--color-border');
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, canvasH / 2); ctx.lineTo(canvasW, canvasH / 2); ctx.stroke();
+  ctx.strokeStyle = getThemeColor('--color-accent');
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  data.forEach((v, i) => {
+    const x = (i * canvasW) / data.length;
+    const y = ((v - min) / a) * canvasH;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+function gen(fx) {
+  PARAMS = new Params();
+  PARAMS.sound_vol   = SOUND_VOL;
+  PARAMS.sample_rate = SAMPLE_RATE;
+  PARAMS.sample_size = SAMPLE_SIZE;
+  if (fx.indexOf('#') === 0) {
+    PARAMS.fromB58(fx.slice(1));
+  } else {
+    PARAMS[fx]();
+  }
+  updateUi();
+  play();
+}
+
+function mut() {
+  PARAMS.mutate();
+  updateUi();
+  play();
+}
+
+function play(noregen) {
+  if (!noregen) {
+    const b58 = PARAMS.toB58();
+    copyBuffer.value = b58;
+    share.href = '#' + b58;
+    SOUND = sfxr.toWave(PARAMS);
+    file_size.textContent   = Math.round(SOUND.wav.length / 1024) + ' kB';
+    num_samples.textContent = SOUND.header.subChunk2Size / (SOUND.header.bitsPerSample >> 3);
+    clipping.textContent    = SOUND.clipping;
+  }
+  wav.href  = SOUND.dataURI;
+  json.href = 'data:text/plain;charset=UTF-8,' + encodeURIComponent(JSON.stringify(PARAMS, null, 2));
+  updateWaveform(SOUND.buffer);
+  SOUND.getAudio().play();
+}
+
+function disable() {
+  const duty = PARAMS.wave_type === SQUARE || PARAMS.wave_type === SAWTOOTH;
+  ['p_duty','p_duty_ramp'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    duty ? el.removeAttribute('disabled') : el.setAttribute('disabled','disabled');
+  });
+}
+
+function updateUi() {
+  for (const param in PARAMS) {
+    const val = PARAMS[param];
+    if (param === 'wave_type') {
+      const r = document.querySelector(`#shape input[value='${val}']`);
+      if (r) r.checked = true;
+    } else if (param === 'sample_rate') {
+      const r = document.querySelector(`#hz input[value='${val}']`);
+      if (r) r.checked = true;
+    } else if (param === 'sample_size') {
+      const r = document.querySelector(`#bits input[value='${val}']`);
+      if (r) r.checked = true;
+    } else {
+      const el = document.getElementById(param);
+      if (el && el.type === 'range') { el.value = val * 1000; convert(el); }
+    }
+  }
+  disable();
+}
+
+function convert(item) {
+  const conv = sliders[item.id];
+  const unit = units[item.id];
+  if (!conv || !item.output) return;
+  let val = conv(item.value / 1000);
+  item.output.textContent = typeof unit === 'function'
+    ? unit(val)
+    : val.toPrecision(4) + ' ' + unit;
+}
+
+// ── Chat (level 3) ────────────────────────────────────────────────────────────
+let chatHistory = [];
+
+function chatAppend(role, text) {
+  const box = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  div.textContent = text;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  return div;
+}
+
+async function sendChat() {
+  if (study.phase !== 'running') return;
+  const input   = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('chatSend');
+  const text    = input.value.trim();
+  if (!text) return;
+
+  const apiUrl = window.CHAT_API_URL;
+  if (!apiUrl || apiUrl.includes('your-vercel-app')) {
+    chatAppend('ai', 'ERROR: Set your backend URL in config.js.');
+    return;
+  }
+
+  input.value = '';
+  chatAppend('user', text);
+  chatHistory.push({ role: 'user', content: text });
+  sendBtn.disabled    = true;
+  sendBtn.textContent = '···';
+  const loading = chatAppend('ai', '···');
+
+  try {
+    const res  = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: chatHistory }),
+    });
+    const data = await res.json();
+    if (!res.ok) { loading.textContent = 'ERROR: ' + (data.error || 'API error'); return; }
+    const sound   = data.sound   || 'random';
+    const message = data.message || 'Generating ' + sound + '...';
+    loading.textContent = message;
+    chatHistory.push({ role: 'assistant', content: JSON.stringify(data) });
+    data.mutate ? mut() : gen(sound);
+  } catch (e) {
+    loading.textContent = 'ERROR: Could not reach backend.';
+  } finally {
+    sendBtn.disabled    = false;
+    sendBtn.textContent = '▶';
+  }
+}
+
+// ── Study helpers ─────────────────────────────────────────────────────────────
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function generateAssignments() {
+  const taskOrder  = shuffle([0, 1, 2]);
+  const levelOrder = shuffle([1, 2, 3]);
+  return taskOrder.map((task, i) => ({ task, level: levelOrder[i] }));
+}
+
+function genPid() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let s = 'P';
+  for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+async function initStudy() {
+  // Resolve PID
+  const urlPid = new URLSearchParams(location.search).get('pid');
+  const lsPid  = localStorage.getItem('sfx-study-pid');
+  study.pid    = urlPid || lsPid || genPid();
+  localStorage.setItem('sfx-study-pid', study.pid);
+
+  // Sync URL
+  if (!urlPid) {
+    const u = new URL(location.href);
+    u.searchParams.set('pid', study.pid);
+    history.replaceState(null, '', u.toString());
+  }
+
+  document.getElementById('hudPid').textContent = study.pid;
+
+  // Try to fetch/create participant from API
+  try {
+    const res = await fetch(window.STUDY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'init', id: study.pid }),
+    });
+    if (res.ok) {
+      study.data = await res.json();
+    } else {
+      throw new Error('API error');
+    }
+  } catch (e) {
+    // Fall back to localStorage-only mode
+    const lsKey  = `sfx-study-${study.pid}`;
+    const stored = localStorage.getItem(lsKey);
+    if (stored) {
+      study.data = JSON.parse(stored);
+    } else {
+      study.data = {
+        id: study.pid,
+        createdAt: new Date().toISOString(),
+        assignments: generateAssignments(),
+        results: [null, null, null],
+      };
+      localStorage.setItem(lsKey, JSON.stringify(study.data));
+    }
+  }
+
+  // Find starting step (first null result)
+  study.step = study.data.results.findIndex(r => r === null);
+  if (study.step === -1) { showComplete(); return; }
+
+  document.getElementById('loadingOverlay').style.display = 'none';
+  setLevel(study.data.assignments[study.step].level);
+  showPopup();
+}
+
+function setLevel(level) {
+  LEVEL = level;
+  document.documentElement.dataset.level = level;
+  const presetsPanel = document.getElementById('presetsPanel');
+  const chatPanel    = document.getElementById('chatPanel');
+  const leftPanel    = document.getElementById('leftPanel');
+
+  if (level === 1) {
+    leftPanel.style.display    = 'none';
+  } else if (level === 2) {
+    leftPanel.style.display    = '';
+    presetsPanel.style.display = 'block';
+    chatPanel.style.display    = 'none';
+  } else {
+    leftPanel.style.display    = '';
+    presetsPanel.style.display = 'none';
+    chatPanel.style.display    = 'flex';
+  }
+}
+
+function showPopup() {
+  const assignment = study.data.assignments[study.step];
+  const taskIdx    = assignment.task;
+  const level      = assignment.level;
+  const stepNum    = study.step + 1;
+
+  document.getElementById('popupStep').textContent    = `TASK ${stepNum} OF 3`;
+  document.getElementById('popupTask').textContent    = TASKS[taskIdx];
+  document.getElementById('popupLevel').textContent   = LEVEL_NAMES[level];
+  const toolsList = document.getElementById('popupTools');
+  toolsList.innerHTML = '';
+  LEVEL_TOOLS[level].forEach(t => {
+    const li = document.createElement('li');
+    li.textContent = t;
+    toolsList.appendChild(li);
+  });
+  document.getElementById('studyPopup').style.display = 'flex';
+}
+
+function startTask() {
+  document.getElementById('studyPopup').style.display = 'none';
+
+  const assignment = study.data.assignments[study.step];
+  document.getElementById('hudStep').textContent  = `TASK ${study.step + 1}/3`;
+  document.getElementById('hudTask').textContent  = TASK_SHORT[assignment.task];
+  document.getElementById('studyHud').style.display = 'block';
+
+  if (LEVEL === 3) {
+    chatHistory = [];
+    const box = document.getElementById('chatMessages');
+    box.innerHTML = '';
+    setTimeout(() => chatAppend('ai', 'READY! Describe the sound you want and I\'ll generate it.'), 50);
+  }
+
+  study.phase = 'running';
+  study.timer = 180;
+  updateHudTimer();
+  study.timerInterval = setInterval(tickTimer, 1000);
+
+  requestAnimationFrame(() => gen('random'));
+}
+
+function tickTimer() {
+  study.timer--;
+  updateHudTimer();
+  if (study.timer <= 0) {
+    clearInterval(study.timerInterval);
+    finishTask(true);
+  }
+}
+
+function updateHudTimer() {
+  const el  = document.getElementById('hudTimer');
+  const m   = Math.floor(study.timer / 60);
+  const s   = study.timer % 60;
+  el.textContent = `${m}:${String(s).padStart(2, '0')}`;
+  el.className = 'hud-timer';
+  if (study.timer <= 30 && study.timer > 10) el.classList.add('warning');
+  if (study.timer <= 10) el.classList.add('critical');
+}
+
+async function finishTask(timedOut) {
+  study.phase = 'done';
+  clearInterval(study.timerInterval);
+  document.body.classList.add('study-locked');
+
+  const b58    = PARAMS ? PARAMS.toB58() : '';
+  const params = PARAMS ? JSON.parse(JSON.stringify(PARAMS)) : {};
+  const result = { b58, params, timedOut };
+
+  // Save to localStorage backup
+  study.data.results[study.step] = { ...result, completedAt: new Date().toISOString() };
+  localStorage.setItem(`sfx-study-${study.pid}`, JSON.stringify(study.data));
+
+  // Try API save
+  try {
+    await fetch(window.STUDY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'result', id: study.pid, taskIndex: study.step, result }),
+    });
+  } catch (e) { /* localStorage backup covers this */ }
+
+  // Show done modal
+  const stepNum  = study.step + 1;
+  const isLast   = study.step >= 2;
+  document.getElementById('doneStep').textContent  = `TASK ${stepNum} COMPLETE`;
+  document.getElementById('doneNextBtn').textContent = isLast ? '✓ FINISH STUDY' : '▶ NEXT TASK';
+  document.getElementById('taskDoneModal').style.display = 'flex';
+}
+
+function nextTask() {
+  document.getElementById('taskDoneModal').style.display = 'none';
+  document.body.classList.remove('study-locked');
+  study.step++;
+  if (study.step >= 3) { showComplete(); return; }
+  setLevel(study.data.assignments[study.step].level);
+  showPopup();
+}
+
+function showComplete() {
+  document.getElementById('studyHud').style.display      = 'none';
+  document.getElementById('completePid').textContent     = study.pid;
+  document.getElementById('studyComplete').style.display = 'flex';
+}
+
+function editPid() {
+  const newPid = prompt('Enter new Participant ID:', study.pid);
+  if (newPid && newPid.trim()) {
+    const u = new URL(location.href);
+    u.searchParams.set('pid', newPid.trim().toUpperCase());
+    location.href = u.toString();
+  }
+}
+
+function submitEarly() {
+  if (!confirm('Submit your current sound and end this task early?')) return;
+  clearInterval(study.timerInterval);
+  finishTask(false);
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
+
+  // DOM refs
+  wav         = document.getElementById('wav');
+  json        = document.getElementById('json');
+  copyBuffer  = document.getElementById('copybuffer');
+  share       = document.getElementById('share');
+  file_size   = document.getElementById('file_size');
+  num_samples = document.getElementById('num_samples');
+  clipping    = document.getElementById('clipping');
+  canvas      = document.getElementById('waveform');
+
+  // Shape
+  document.querySelectorAll('#shape input[type=radio]').forEach(el => {
+    el.addEventListener('change', e => { PARAMS.wave_type = parseInt(e.target.value); disable(); play(); });
+  });
+  // Hz
+  document.querySelectorAll('#hz input[type=radio]').forEach(el => {
+    el.addEventListener('change', e => { SAMPLE_RATE = PARAMS.sample_rate = parseInt(e.target.value); play(); });
+  });
+  // Bits
+  document.querySelectorAll('#bits input[type=radio]').forEach(el => {
+    el.addEventListener('change', e => { SAMPLE_SIZE = PARAMS.sample_size = parseInt(e.target.value); play(); });
+  });
+
+  // Sliders
+  document.querySelectorAll('.slider').forEach(item => {
+    const id  = item.id;
+    const row = document.createElement('div');
+    row.className = 'slider-row';
+    item.replaceWith(row);
+    const label  = document.createElement('label');
+    label.setAttribute('for', id);
+    label.textContent = item.dataset.title;
+    const output = document.createElement('output');
+    output.setAttribute('for', id);
+    row.appendChild(label);
+    row.appendChild(output);
+    item.dataset.position === 'after' ? row.appendChild(item) : row.insertAdjacentElement('afterbegin', item);
+    item.type  = 'range';
+    item.min   = item.classList.contains('signed') ? -1000 : 0;
+    item.max   = 1000;
+    item.value = item.classList.contains('signed') ? 0 : 500;
+    item.output = output;
+    item.addEventListener('input',  () => convert(item));
+    item.addEventListener('change', () => { PARAMS[id] = item.value / 1000; convert(item); play(); });
+  });
+
+  // Theme toggle
+  document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
+  // Window resize
+  window.addEventListener('resize', () => { if (SOUND) updateWaveform(SOUND.buffer); });
+
+  // Chat enter key
+  document.getElementById('chatInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && study.phase === 'running') sendChat();
+  });
+
+  initStudy();
+});
+</script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --color-bg:          #0c0c12;
+  --color-surface:     #141420;
+  --color-surface-2:   #1e1e2e;
+  --color-border:      #30304a;
+  --color-text:        #e8e8f4;
+  --color-text-dim:    #9898b8;
+  --color-accent:      #33ff88;
+  --color-accent-dim:  #1a7040;
+  --color-accent-glow: rgba(51,255,136,.12);
+  --color-info:        #55bbff;
+  --color-warning:     #ffcc00;
+  --color-danger:      #ff4455;
+  --color-btn-shadow:  #06060e;
+  --px-shadow: 3px 3px 0 var(--color-btn-shadow);
+  --font-pixel: 'Press Start 2P', monospace;
+  --font-retro: 'VT323', monospace;
+  --font-ui: 'Courier New', monospace;
+}
+
+[data-theme="light"] {
+  --color-bg:          #f2eee0;
+  --color-surface:     #fffdf6;
+  --color-surface-2:   #eae6d6;
+  --color-border:      #b8b0a0;
+  --color-text:        #18181e;
+  --color-text-dim:    #505060;
+  --color-accent:      #c40040;
+  --color-accent-dim:  #820028;
+  --color-accent-glow: rgba(196,0,64,.08);
+  --color-info:        #0050cc;
+  --color-warning:     #bb5500;
+  --color-danger:      #cc0000;
+  --color-btn-shadow:  #9a9284;
+  --px-shadow: 3px 3px 0 var(--color-btn-shadow);
+}
+
+html {
+  font-family: var(--font-retro);
+  font-size: 16px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.4;
+  min-height: 100vh;
+}
+a { color: var(--color-accent); text-decoration: none; }
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--color-surface);
+  border-bottom: 2px solid var(--color-border);
+}
+.logo {
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  color: var(--color-accent);
+  letter-spacing: 2px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-icon {
+  width: 22px; height: 22px;
+  background: var(--color-accent);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+  flex-shrink: 0;
+}
+#themeToggle {
+  font-family: var(--font-retro);
+  font-size: 18px;
+  background: transparent;
+  color: var(--color-text-dim);
+  border: 2px solid var(--color-border);
+  box-shadow: var(--px-shadow);
+  padding: 4px 12px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  line-height: 1.2;
+}
+#themeToggle:hover { color: var(--color-text); border-color: var(--color-text-dim); }
+
+.app-layout {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  align-items: start;
+}
+html[data-level="1"] .app-layout { grid-template-columns: 1fr 220px; max-width: 800px; margin: 0 auto; }
+html[data-level="2"] .app-layout { grid-template-columns: 195px 1fr 220px; max-width: 1050px; margin: 0 auto; }
+html[data-level="3"] .app-layout { grid-template-columns: 260px 1fr 220px; max-width: 1110px; margin: 0 auto; }
+@media (max-width: 680px) {
+  html[data-level="1"] .app-layout,
+  html[data-level="2"] .app-layout,
+  html[data-level="3"] .app-layout { grid-template-columns: 1fr; }
+}
+
+.panel { background: var(--color-surface); border: 2px solid var(--color-border); padding: 10px; }
+.panel-header {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--color-accent);
+  letter-spacing: 3px;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+.panel-label {
+  font-family: var(--font-retro);
+  font-size: 15px;
+  color: var(--color-text-dim);
+  letter-spacing: 2px;
+  margin: 10px 0 4px;
+  text-transform: uppercase;
+}
+
+.px-btn {
+  display: block; width: 100%;
+  padding: 7px 10px;
+  font-family: var(--font-retro);
+  font-size: 18px;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border: 2px solid var(--color-border);
+  box-shadow: var(--px-shadow);
+  cursor: pointer;
+  text-align: left;
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+  position: relative; top: 0; left: 0;
+  line-height: 1.2;
+}
+.px-btn:hover  { background: var(--color-accent-glow); border-color: var(--color-accent); color: var(--color-accent); }
+.px-btn:active { top: 3px; left: 3px; box-shadow: none; }
+.px-btn.play-btn {
+  background: var(--color-accent-dim);
+  color: var(--color-bg);
+  border-color: var(--color-accent);
+  font-size: 20px;
+  text-align: center;
+  padding: 10px;
+  margin-bottom: 10px;
+  letter-spacing: 3px;
+  font-weight: bold;
+}
+.px-btn.play-btn:hover { background: var(--color-accent); }
+
+.divider { border: none; border-top: 1px solid var(--color-border); margin: 8px 0; }
+
+.wave-selector { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-bottom: 10px; }
+.wave-selector input { display: none; }
+.wave-selector label {
+  font-family: var(--font-retro); font-size: 17px;
+  padding: 5px 2px; text-align: center;
+  background: var(--color-surface-2); color: var(--color-text);
+  border: 2px solid var(--color-border); box-shadow: var(--px-shadow);
+  cursor: pointer; display: block; letter-spacing: 1px; line-height: 1.2;
+}
+.wave-selector label:hover { border-color: var(--color-text-dim); }
+.wave-selector input:checked + label { background: var(--color-accent-dim); color: var(--color-bg); border-color: var(--color-accent); }
+
+fieldset { border: none; border-left: 2px solid var(--color-accent-dim); padding: 4px 0 4px 8px; margin-bottom: 6px; }
+fieldset legend { font-family: var(--font-pixel); font-size: 7px; color: var(--color-accent); letter-spacing: 1px; padding: 0 4px; margin-left: -8px; margin-bottom: 4px; }
+
+.slider-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.slider-row label { font-family: var(--font-retro); font-size: 15px; color: var(--color-text); width: 76px; flex: 0 0 76px; line-height: 1.2; white-space: nowrap; overflow: hidden; }
+.slider-row output { font-family: var(--font-ui); font-size: 11px; color: var(--color-accent); width: 96px; flex: 0 0 96px; text-align: right; white-space: nowrap; overflow: hidden; }
+
+input[type="range"] { -webkit-appearance: none; appearance: none; flex: 1; min-width: 40px; height: 10px; background: var(--color-surface-2); border: 1px solid var(--color-border); outline: none; cursor: pointer; }
+input[type="range"]::-webkit-slider-runnable-track { background: var(--color-surface-2); height: 10px; }
+input[type="range"]::-moz-range-track { background: var(--color-surface-2); border: 1px solid var(--color-border); height: 10px; border-radius: 0; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 20px; background: var(--color-accent); border: 1px solid var(--color-accent-dim); cursor: pointer; margin-top: -5px; }
+input[type="range"]::-moz-range-thumb { width: 12px; height: 20px; background: var(--color-accent); border: 1px solid var(--color-accent-dim); cursor: pointer; border-radius: 0; }
+input[type="range"]:disabled { opacity: .3; cursor: default; }
+input[type="range"]:disabled::-webkit-slider-thumb { background: var(--color-text-dim); }
+input[type="range"]:disabled::-moz-range-thumb     { background: var(--color-text-dim); }
+
+.stat-table { margin: 8px 0; }
+.stat-row { display: flex; justify-content: space-between; font-family: var(--font-retro); font-size: 16px; padding: 2px 0; border-bottom: 1px solid var(--color-border); color: var(--color-text-dim); line-height: 1.3; }
+.stat-row span:last-child { color: var(--color-text); }
+
+.buttonset-row { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 4px; }
+.buttonset-row input { display: none; }
+.buttonset-row label { font-family: var(--font-retro); font-size: 17px; padding: 4px 10px; background: var(--color-surface-2); color: var(--color-text); border: 2px solid var(--color-border); box-shadow: var(--px-shadow); cursor: pointer; letter-spacing: 1px; line-height: 1.2; }
+.buttonset-row label:hover { border-color: var(--color-text-dim); }
+.buttonset-row input:checked + label { background: var(--color-accent-dim); color: var(--color-bg); border-color: var(--color-accent); }
+
+.export-links { display: flex; flex-direction: column; gap: 3px; margin-top: 10px; }
+.px-link { font-family: var(--font-retro); font-size: 18px; display: block; padding: 5px 8px; background: var(--color-surface-2); color: var(--color-text); border: 2px solid var(--color-border); box-shadow: var(--px-shadow); text-decoration: none; letter-spacing: 0.5px; cursor: pointer; position: relative; top: 0; left: 0; line-height: 1.3; }
+.px-link:hover  { border-color: var(--color-info); color: var(--color-info); }
+.px-link:active { top: 3px; left: 3px; box-shadow: none; }
+#share:hover    { border-color: var(--color-warning); color: var(--color-warning); }
+
+#waveform { display: block; width: 100%; height: 72px; background: var(--color-surface-2); border: 2px solid var(--color-border); margin: 8px 0; }
+
+#chatPanel { display: none; flex-direction: column; height: 100%; min-height: 300px; }
+.chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; min-height: 220px; max-height: 460px; padding: 2px 0; }
+.chat-msg { font-family: var(--font-retro); font-size: 17px; line-height: 1.5; padding: 8px 8px 8px 10px; border: 1px solid var(--color-border); word-break: break-word; }
+.chat-msg.ai   { background: var(--color-surface-2); border-left: 3px solid var(--color-accent); color: var(--color-text); }
+.chat-msg.ai::before   { content: 'AI ▶ '; color: var(--color-accent); font-size: 15px; }
+.chat-msg.user { background: var(--color-surface-2); border-left: 3px solid var(--color-info); color: var(--color-text); }
+.chat-msg.user::before { content: 'YOU ▶ '; color: var(--color-info); font-size: 15px; }
+.chat-input-row { display: flex; gap: 4px; margin-top: 8px; flex-shrink: 0; }
+#chatInput { flex: 1; font-family: var(--font-retro); font-size: 18px; padding: 6px 8px; background: var(--color-surface-2); color: var(--color-text); border: 2px solid var(--color-border); outline: none; min-width: 0; line-height: 1.2; }
+#chatInput:focus { border-color: var(--color-accent); }
+#chatInput::placeholder { color: var(--color-text-dim); }
+#chatSend { font-family: var(--font-retro); font-size: 20px; padding: 6px 12px; background: var(--color-accent-dim); color: var(--color-bg); border: 2px solid var(--color-accent); box-shadow: var(--px-shadow); cursor: pointer; flex-shrink: 0; position: relative; top: 0; left: 0; line-height: 1.2; font-weight: bold; }
+#chatSend:hover  { background: var(--color-accent); }
+#chatSend:active { top: 3px; left: 3px; box-shadow: none; }
+#chatSend:disabled { opacity: .5; cursor: default; }
+
+#copybuffer { position: fixed; top: -9999px; left: -9999px; opacity: 0; pointer-events: none; }
+
+/* ── Study overlay styles ─────────────────────────────────────────────────── */
+.study-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.82);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+.study-box {
+  background: var(--color-surface);
+  border: 3px solid var(--color-accent);
+  box-shadow: 6px 6px 0 var(--color-btn-shadow);
+  max-width: 540px;
+  width: 100%;
+  padding: 24px;
+}
+.study-box h2 {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--color-accent);
+  letter-spacing: 3px;
+  margin-bottom: 16px;
+}
+.study-box h3 {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--color-text-dim);
+  letter-spacing: 2px;
+  margin: 14px 0 6px;
+  text-transform: uppercase;
+}
+.study-box p {
+  font-family: var(--font-retro);
+  font-size: 20px;
+  color: var(--color-text);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.study-box ul {
+  list-style: none;
+  margin-bottom: 8px;
+}
+.study-box ul li {
+  font-family: var(--font-retro);
+  font-size: 18px;
+  color: var(--color-text-dim);
+  line-height: 1.5;
+  padding: 2px 0 2px 14px;
+  position: relative;
+}
+.study-box ul li::before { content: '▸ '; color: var(--color-accent); position: absolute; left: 0; }
+.study-box .time-note {
+  font-family: var(--font-retro);
+  font-size: 17px;
+  color: var(--color-warning);
+  margin: 12px 0;
+}
+.study-btn {
+  display: block; width: 100%; margin-top: 16px;
+  padding: 12px;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 2px;
+  background: var(--color-accent-dim);
+  color: var(--color-bg);
+  border: 2px solid var(--color-accent);
+  box-shadow: var(--px-shadow);
+  cursor: pointer;
+  text-align: center;
+  position: relative; top: 0; left: 0;
+}
+.study-btn:hover  { background: var(--color-accent); }
+.study-btn:active { top: 3px; left: 3px; box-shadow: none; }
+.study-btn.secondary {
+  background: var(--color-surface-2);
+  color: var(--color-text-dim);
+  border-color: var(--color-border);
+  font-size: 8px;
+  margin-top: 8px;
+}
+.study-btn.secondary:hover { border-color: var(--color-warning); color: var(--color-warning); }
+
+/* ── Corner HUD ──────────────────────────────────────────────────────────── */
+#studyHud {
+  position: fixed;
+  top: 62px; right: 12px;
+  z-index: 500;
+  background: var(--color-surface);
+  border: 2px solid var(--color-accent);
+  box-shadow: var(--px-shadow);
+  padding: 10px 12px;
+  min-width: 160px;
+  max-width: 200px;
+}
+.hud-pid {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: var(--color-text-dim);
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hud-pid span { color: var(--color-text); }
+.hud-edit-btn {
+  background: none; border: none;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  line-height: 1;
+}
+.hud-edit-btn:hover { color: var(--color-accent); }
+.hud-step {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--color-accent);
+  letter-spacing: 2px;
+  margin-bottom: 2px;
+}
+.hud-task-name {
+  font-family: var(--font-retro);
+  font-size: 17px;
+  color: var(--color-text-dim);
+  line-height: 1.3;
+  margin-bottom: 6px;
+}
+.hud-timer {
+  font-family: var(--font-pixel);
+  font-size: 16px;
+  color: var(--color-accent);
+  letter-spacing: 2px;
+}
+.hud-timer.warning  { color: var(--color-warning); }
+.hud-timer.critical { color: var(--color-danger); animation: pulse 0.5s infinite alternate; }
+@keyframes pulse { from { opacity: 1; } to { opacity: 0.4; } }
+
+.hud-early-btn {
+  display: block; width: 100%; margin-top: 8px;
+  padding: 4px 6px;
+  font-family: var(--font-retro);
+  font-size: 14px;
+  background: var(--color-surface-2);
+  color: var(--color-text-dim);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+.hud-early-btn:hover { color: var(--color-warning); border-color: var(--color-warning); }
+
+/* ── Loading overlay ─────────────────────────────────────────────────────── */
+#loadingOverlay {
+  position: fixed; inset: 0;
+  background: var(--color-bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2000;
+}
+#loadingOverlay p {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--color-accent);
+  letter-spacing: 3px;
+  animation: pulse 0.8s infinite alternate;
+}
+
+/* ── Lock state ──────────────────────────────────────────────────────────── */
+body.study-locked #manualPanel { opacity: 0.45; pointer-events: none; }
+body.study-locked #leftPanel   { opacity: 0.45; pointer-events: none; }
+body.study-locked #chatInput   { pointer-events: none; }
+body.study-locked #chatSend    { pointer-events: none; }
+body.study-locked .px-btn:not(.play-btn) { pointer-events: none; opacity: 0.45; }
+body.study-locked .play-btn { pointer-events: auto !important; opacity: 1 !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon"></div>
+    SFX STUDIO
+  </div>
+  <button id="themeToggle">◑ THEME</button>
+</header>
+
+<main class="app-layout">
+
+  <!-- LEFT PANEL -->
+  <aside class="panel" id="leftPanel" style="display:none">
+    <div id="presetsPanel" style="display:none">
+      <div class="panel-header">GENERATE</div>
+      <button class="px-btn" onclick="gen('random')">Random</button>
+      <div class="divider"></div>
+      <button class="px-btn" onclick="gen('pickupCoin')">Pickup / Coin</button>
+      <button class="px-btn" onclick="gen('laserShoot')">Laser / Shoot</button>
+      <button class="px-btn" onclick="gen('explosion')">Explosion</button>
+      <button class="px-btn" onclick="gen('powerUp')">Power Up</button>
+      <button class="px-btn" onclick="gen('hitHurt')">Hit / Hurt</button>
+      <button class="px-btn" onclick="gen('jump')">Jump</button>
+      <button class="px-btn" onclick="gen('click')">Click</button>
+      <button class="px-btn" onclick="gen('blipSelect')">Blip / Select</button>
+      <button class="px-btn" onclick="gen('synth')">Synth</button>
+      <button class="px-btn" onclick="gen('tone')">Tone</button>
+      <div class="divider"></div>
+      <button class="px-btn" onclick="mut()">Mutate</button>
+    </div>
+    <div id="chatPanel">
+      <div class="panel-header">AI ASSISTANT</div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Describe a sound…" />
+        <button id="chatSend" onclick="sendChat()">▶</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- CENTER PANEL -->
+  <section class="panel" id="manualPanel">
+    <div class="panel-header">MANUAL SETTINGS</div>
+    <div class="panel-label">Wave Shape</div>
+    <div class="wave-selector" id="shape">
+      <input type="radio" id="square"   value="0" name="shape" />
+      <label for="square">SQR</label>
+      <input type="radio" id="sawtooth" value="1" name="shape" checked />
+      <label for="sawtooth">SAW</label>
+      <input type="radio" id="sine"     value="2" name="shape" />
+      <label for="sine">SIN</label>
+      <input type="radio" id="noise"    value="3" name="shape" />
+      <label for="noise">NOI</label>
+    </div>
+    <fieldset>
+      <legend>Envelope</legend>
+      <input class="slider" id="p_env_attack"  data-title="Attack"  />
+      <input class="slider" id="p_env_sustain" data-title="Sustain" />
+      <input class="slider" id="p_env_punch"   data-title="Punch"   />
+      <input class="slider" id="p_env_decay"   data-title="Decay"   />
+    </fieldset>
+    <fieldset>
+      <legend>Frequency</legend>
+      <input class="slider"        id="p_base_freq"  data-title="Start Freq" />
+      <input class="slider"        id="p_freq_limit" data-title="Min Cutoff" />
+      <input class="slider signed" id="p_freq_ramp"  data-title="Slide"      />
+      <input class="slider signed" id="p_freq_dramp" data-title="Δ Slide"    />
+    </fieldset>
+    <fieldset>
+      <legend>Vibrato</legend>
+      <input class="slider" id="p_vib_strength" data-title="Depth" />
+      <input class="slider" id="p_vib_speed"    data-title="Speed" />
+    </fieldset>
+    <fieldset>
+      <legend>Arpeggiation</legend>
+      <input class="slider signed" id="p_arp_mod"   data-title="Freq Mult" />
+      <input class="slider"        id="p_arp_speed"  data-title="Speed"     />
+    </fieldset>
+    <fieldset>
+      <legend>Duty Cycle</legend>
+      <input class="slider"        id="p_duty"      data-title="Duty"  />
+      <input class="slider signed" id="p_duty_ramp" data-title="Sweep" />
+    </fieldset>
+    <fieldset>
+      <legend>Retrigger</legend>
+      <input class="slider" id="p_repeat_speed" data-title="Rate" />
+    </fieldset>
+    <fieldset>
+      <legend>Flanger</legend>
+      <input class="slider signed" id="p_pha_offset" data-title="Offset" />
+      <input class="slider signed" id="p_pha_ramp"   data-title="Sweep"  />
+    </fieldset>
+    <fieldset>
+      <legend>Lo-Pass Filter</legend>
+      <input class="slider"        id="p_lpf_freq"      data-title="Cutoff"    />
+      <input class="slider signed" id="p_lpf_ramp"      data-title="Sweep"     />
+      <input class="slider"        id="p_lpf_resonance" data-title="Resonance" />
+    </fieldset>
+    <fieldset>
+      <legend>Hi-Pass Filter</legend>
+      <input class="slider"        id="p_hpf_freq" data-title="Cutoff" />
+      <input class="slider signed" id="p_hpf_ramp" data-title="Sweep"  />
+    </fieldset>
+  </section>
+
+  <!-- RIGHT PANEL -->
+  <aside class="panel" id="outputPanel">
+    <div class="panel-header">SOUND</div>
+    <button class="px-btn play-btn" onclick="play(true)">▶ PLAY</button>
+    <canvas id="waveform"></canvas>
+    <div class="stat-table">
+      <div class="stat-row"><span>File size</span><span id="file_size">—</span></div>
+      <div class="stat-row"><span>Samples</span><span id="num_samples">—</span></div>
+      <div class="stat-row"><span>Clipped</span><span id="clipping">—</span></div>
+    </div>
+    <div class="panel-label">Gain</div>
+    <input class="slider" id="sound_vol" data-title="Gain" data-position="after" />
+    <div class="panel-label">Sample Rate</div>
+    <div id="hz" class="buttonset-row">
+      <input type="radio" id="44100" value="44100" name="hz" checked /><label for="44100">44k</label>
+      <input type="radio" id="22050" value="22050" name="hz" /><label for="22050">22k</label>
+      <input type="radio" id="11025" value="11025" name="hz" /><label for="11025">11k</label>
+      <input type="radio" id="8000"  value="8000"  name="hz" /><label for="8000">8k</label>
+    </div>
+    <div class="panel-label">Bit Depth</div>
+    <div id="bits" class="buttonset-row">
+      <input type="radio" id="16" value="16" name="bits" /><label for="16">16</label>
+      <input type="radio" id="8"  value="8"  name="bits" checked /><label for="8">8</label>
+    </div>
+    <div class="export-links">
+      <a class="px-link" id="wav"  download="sfx.wav">↓ WAV</a>
+      <a class="px-link" id="json" download="sfx.json">↓ JSON</a>
+      <a class="px-link" id="share">⎘ PERMALINK</a>
+    </div>
+    <input id="copybuffer" readonly />
+  </aside>
+
+</main>
+
+<!-- ── Loading overlay ──────────────────────────────────────────────────────── -->
+<div id="loadingOverlay">
+  <p>LOADING…</p>
+</div>
+
+<!-- ── Corner HUD ───────────────────────────────────────────────────────────── -->
+<div id="studyHud" style="display:none">
+  <div class="hud-pid">
+    ID: <span id="hudPid">—</span>
+    <button class="hud-edit-btn" onclick="editPid()" title="Edit participant ID">✎</button>
+  </div>
+  <div class="hud-step" id="hudStep">TASK 1/3</div>
+  <div class="hud-task-name" id="hudTask">—</div>
+  <div class="hud-timer" id="hudTimer">3:00</div>
+  <button class="hud-early-btn" onclick="submitEarly()">Submit Early</button>
+</div>
+
+<!-- ── Task popup ────────────────────────────────────────────────────────────── -->
+<div class="study-overlay" id="studyPopup" style="display:none">
+  <div class="study-box">
+    <h2 id="popupStep">TASK 1 OF 3</h2>
+    <h3>YOUR TASK</h3>
+    <p id="popupTask"></p>
+    <h3>YOUR TOOLS</h3>
+    <p id="popupLevel" style="font-family:var(--font-pixel);font-size:7px;color:var(--color-accent);letter-spacing:2px;margin-bottom:8px;"></p>
+    <ul id="popupTools"></ul>
+    <p class="time-note">⏱ You have 3 minutes. Your sound locks when time runs out.</p>
+    <button class="study-btn" onclick="startTask()">▶ START TASK</button>
+  </div>
+</div>
+
+<!-- ── Task done modal ───────────────────────────────────────────────────────── -->
+<div class="study-overlay" id="taskDoneModal" style="display:none">
+  <div class="study-box" style="text-align:center">
+    <h2 id="doneStep">TASK 1 COMPLETE</h2>
+    <p style="color:var(--color-accent);font-size:22px;margin:16px 0;">✓ Sound saved</p>
+    <button class="study-btn" id="doneNextBtn" onclick="nextTask()">▶ NEXT TASK</button>
+  </div>
+</div>
+
+<!-- ── Study complete ────────────────────────────────────────────────────────── -->
+<div class="study-overlay" id="studyComplete" style="display:none">
+  <div class="study-box" style="text-align:center">
+    <h2>STUDY COMPLETE!</h2>
+    <p style="font-size:22px;margin:16px 0;">All 3 tasks finished.<br>Thank you!</p>
+    <p style="font-family:var(--font-pixel);font-size:7px;color:var(--color-text-dim);letter-spacing:2px;margin-top:16px;">
+      PARTICIPANT ID: <span id="completePid" style="color:var(--color-accent)"></span>
+    </p>
+  </div>
+</div>
+
+</body>
+</html>

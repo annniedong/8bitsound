@@ -3,3 +3,7 @@
 window.CHAT_API_URL = location.hostname === 'localhost'
   ? '/api/chat'
   : 'https://8bitsound.vercel.app/api/chat';
+
+window.STUDY_API_URL = location.hostname === 'localhost'
+  ? '/api/study'
+  : 'https://8bitsound.vercel.app/api/study';

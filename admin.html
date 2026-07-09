@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SFX Study — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script>
+const TASKS = [
+  "Make the sound of stepping through a portal into an unknown dimension",
+  "Make the sound of a memory being erased from someone's mind",
+  "Make the sound of a small creature discovering a new element"
+];
+const TASK_SHORT = ["Portal", "Memory Erasure", "New Element"];
+const LEVEL_NAMES = { 1: "L1 Manual", 2: "L2 Presets", 3: "L3 AI" };
+
+let participants = [];
+let reloadInterval = null;
+let expandedPid = null;
+
+function getSecret() { return sessionStorage.getItem('sfx-admin-secret'); }
+function setSecret(s) { sessionStorage.setItem('sfx-admin-secret', s); }
+function clearSecret() { sessionStorage.removeItem('sfx-admin-secret'); location.reload(); }
+
+async function fetchData() {
+  const secret = getSecret();
+  if (!secret) return;
+  try {
+    const res = await fetch(`${window.STUDY_API_URL}?secret=${encodeURIComponent(secret)}`);
+    if (res.status === 403 || res.status === 401) {
+      alert('Wrong secret. Try again.');
+      clearSecret();
+      return;
+    }
+    const data = await res.json();
+    participants = (data.participants || []).sort((a, b) => (a.id > b.id ? 1 : -1));
+    renderTable();
+    document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    document.getElementById('statusMsg').textContent = 'ERROR: ' + e.message;
+  }
+}
+
+function login() {
+  const s = document.getElementById('secretInput').value.trim();
+  if (!s) return;
+  setSecret(s);
+  document.getElementById('loginSection').style.display = 'none';
+  document.getElementById('dashSection').style.display  = 'block';
+  fetchData();
+  reloadInterval = setInterval(fetchData, 30000);
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+  if (!participants.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;font-family:var(--font-retro);font-size:18px;color:var(--color-text-dim)">No participants yet.</td></tr>';
+    return;
+  }
+  participants.forEach(p => {
+    const done = p.results.filter(r => r !== null).length;
+    const status = done >= 3 ? 'Done' : `${done}/3`;
+    const tr = document.createElement('tr');
+    tr.className = 'data-row' + (expandedPid === p.id ? ' expanded' : '');
+    tr.onclick = () => toggleExpand(p.id);
+
+    let cells = `<td class="pid-cell">${p.id}</td>`;
+    for (let i = 0; i < 3; i++) {
+      const a = p.assignments[i];
+      const r = p.results[i];
+      const label = `${TASK_SHORT[a.task]} — ${LEVEL_NAMES[a.level]}`;
+      const check = r ? '<span class="check">✓</span>' : '<span class="dash">—</span>';
+      cells += `<td>${label}<br>${check}</td>`;
+    }
+    cells += `<td class="status-cell ${done >= 3 ? 'done' : ''}">${status}</td>`;
+    tr.innerHTML = cells;
+    tbody.appendChild(tr);
+
+    if (expandedPid === p.id) {
+      const detailRow = document.createElement('tr');
+      detailRow.className = 'detail-row';
+      detailRow.innerHTML = `<td colspan="6">${renderDetail(p)}</td>`;
+      tbody.appendChild(detailRow);
+    }
+  });
+}
+
+function renderDetail(p) {
+  let html = '<div class="detail-box">';
+  html += `<div class="detail-meta">Created: ${new Date(p.createdAt).toLocaleString()}</div>`;
+  for (let i = 0; i < 3; i++) {
+    const a = p.assignments[i];
+    const r = p.results[i];
+    html += `<div class="detail-task">`;
+    html += `<div class="detail-task-header">Task ${i+1}: ${TASK_SHORT[a.task]} — ${LEVEL_NAMES[a.level]}</div>`;
+    html += `<div class="detail-task-desc">${TASKS[a.task]}</div>`;
+    if (r) {
+      html += `<div class="detail-row-info">Completed: ${new Date(r.completedAt).toLocaleString()} | ${r.timedOut ? 'Timed out' : 'Submitted early'}</div>`;
+      html += `<div class="detail-b58-row">B58: <code class="b58-code" onclick="copyCode(this)">${r.b58}</code> <span class="copy-hint">(click to copy)</span></div>`;
+      html += `<details class="params-details"><summary>Full Params JSON</summary><pre class="params-pre">${JSON.stringify(r.params, null, 2)}</pre></details>`;
+    } else {
+      html += `<div class="detail-row-info" style="color:var(--color-text-dim)">Not yet completed.</div>`;
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function toggleExpand(pid) {
+  expandedPid = expandedPid === pid ? null : pid;
+  renderTable();
+}
+
+function copyCode(el) {
+  navigator.clipboard.writeText(el.textContent).then(() => {
+    const orig = el.style.color;
+    el.style.color = 'var(--color-accent)';
+    setTimeout(() => { el.style.color = orig; }, 800);
+  });
+}
+
+function downloadJSON() {
+  const blob = new Blob([JSON.stringify(participants, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `sfx-study-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+
+function downloadCSV() {
+  const rows = [['pid','createdAt','stepIndex','taskName','level','b58','timedOut','completedAt']];
+  participants.forEach(p => {
+    p.assignments.forEach((a, i) => {
+      const r = p.results[i];
+      rows.push([
+        p.id,
+        p.createdAt,
+        i,
+        TASK_SHORT[a.task],
+        a.level,
+        r ? r.b58 : '',
+        r ? r.timedOut : '',
+        r ? r.completedAt : '',
+      ]);
+    });
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `sfx-study-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const secret = getSecret();
+  if (secret) {
+    document.getElementById('loginSection').style.display = 'none';
+    document.getElementById('dashSection').style.display  = 'block';
+    fetchData();
+    reloadInterval = setInterval(fetchData, 30000);
+  }
+  document.getElementById('secretInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') login();
+  });
+});
+</script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --color-bg:          #0c0c12;
+  --color-surface:     #141420;
+  --color-surface-2:   #1e1e2e;
+  --color-border:      #30304a;
+  --color-text:        #e8e8f4;
+  --color-text-dim:    #9898b8;
+  --color-accent:      #33ff88;
+  --color-accent-dim:  #1a7040;
+  --color-accent-glow: rgba(51,255,136,.12);
+  --color-info:        #55bbff;
+  --color-warning:     #ffcc00;
+  --color-btn-shadow:  #06060e;
+  --px-shadow: 3px 3px 0 var(--color-btn-shadow);
+  --font-pixel: 'Press Start 2P', monospace;
+  --font-retro: 'VT323', monospace;
+  --font-ui: 'Courier New', monospace;
+}
+
+[data-theme="light"] {
+  --color-bg:          #f2eee0;
+  --color-surface:     #fffdf6;
+  --color-surface-2:   #eae6d6;
+  --color-border:      #b8b0a0;
+  --color-text:        #18181e;
+  --color-text-dim:    #505060;
+  --color-accent:      #c40040;
+  --color-accent-dim:  #820028;
+  --color-accent-glow: rgba(196,0,64,.08);
+  --color-info:        #0050cc;
+  --color-warning:     #bb5500;
+  --color-btn-shadow:  #9a9284;
+  --px-shadow: 3px 3px 0 var(--color-btn-shadow);
+}
+
+html {
+  font-family: var(--font-retro);
+  font-size: 16px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.4;
+  min-height: 100vh;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--color-surface);
+  border-bottom: 2px solid var(--color-border);
+}
+.logo {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--color-accent);
+  letter-spacing: 2px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.logo-icon { width: 22px; height: 22px; background: var(--color-accent); clip-path: polygon(0 0, 100% 50%, 0 100%); flex-shrink: 0; }
+
+.admin-badge {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
+  padding: 3px 7px;
+  letter-spacing: 2px;
+}
+
+main { max-width: 1100px; margin: 0 auto; padding: 20px 16px; }
+
+/* ── Login ── */
+#loginSection {
+  max-width: 400px;
+  margin: 80px auto;
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  padding: 24px;
+}
+#loginSection h2 {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--color-accent);
+  letter-spacing: 3px;
+  margin-bottom: 20px;
+}
+#loginSection label {
+  font-family: var(--font-retro);
+  font-size: 18px;
+  color: var(--color-text-dim);
+  display: block;
+  margin-bottom: 6px;
+  letter-spacing: 1px;
+}
+#secretInput {
+  width: 100%;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  padding: 8px;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border: 2px solid var(--color-border);
+  outline: none;
+  margin-bottom: 12px;
+}
+#secretInput:focus { border-color: var(--color-accent); }
+
+.px-btn {
+  display: inline-block;
+  padding: 8px 16px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  letter-spacing: 2px;
+  background: var(--color-accent-dim);
+  color: var(--color-bg);
+  border: 2px solid var(--color-accent);
+  box-shadow: var(--px-shadow);
+  cursor: pointer;
+  position: relative; top: 0; left: 0;
+  line-height: 1.4;
+}
+.px-btn:hover  { background: var(--color-accent); }
+.px-btn:active { top: 3px; left: 3px; box-shadow: none; }
+.px-btn.secondary {
+  background: var(--color-surface-2);
+  color: var(--color-text-dim);
+  border-color: var(--color-border);
+}
+.px-btn.secondary:hover { border-color: var(--color-warning); color: var(--color-warning); }
+
+/* ── Dashboard ── */
+#dashSection { display: none; }
+
+.dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.dash-title {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--color-accent);
+  letter-spacing: 3px;
+}
+.dash-meta {
+  font-family: var(--font-retro);
+  font-size: 16px;
+  color: var(--color-text-dim);
+}
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+#statusMsg { font-family: var(--font-retro); font-size: 17px; color: var(--color-warning); margin-bottom: 10px; }
+#lastUpdated { font-family: var(--font-retro); font-size: 16px; color: var(--color-text-dim); margin-bottom: 12px; }
+
+/* ── Table ── */
+.table-wrap { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+}
+thead th {
+  font-family: var(--font-pixel);
+  font-size: 7px;
+  color: var(--color-accent);
+  letter-spacing: 2px;
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 2px solid var(--color-border);
+  background: var(--color-surface-2);
+  white-space: nowrap;
+}
+tbody td {
+  font-family: var(--font-retro);
+  font-size: 17px;
+  color: var(--color-text);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+  line-height: 1.4;
+}
+tr.data-row { cursor: pointer; }
+tr.data-row:hover td { background: var(--color-accent-glow); }
+tr.data-row.expanded td { background: var(--color-accent-glow); border-bottom: none; }
+
+.pid-cell {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--color-info);
+  letter-spacing: 1px;
+}
+.status-cell { font-family: var(--font-pixel); font-size: 8px; color: var(--color-text-dim); text-align: center; }
+.status-cell.done { color: var(--color-accent); }
+.check { color: var(--color-accent); font-size: 18px; }
+.dash  { color: var(--color-text-dim); font-size: 18px; }
+
+/* ── Detail row ── */
+tr.detail-row td { padding: 0; background: var(--color-surface-2); border-bottom: 2px solid var(--color-accent); }
+.detail-box { padding: 16px; }
+.detail-meta { font-family: var(--font-retro); font-size: 16px; color: var(--color-text-dim); margin-bottom: 12px; }
+.detail-task { margin-bottom: 16px; border-left: 3px solid var(--color-accent-dim); padding-left: 12px; }
+.detail-task-header { font-family: var(--font-pixel); font-size: 7px; color: var(--color-accent); letter-spacing: 2px; margin-bottom: 4px; }
+.detail-task-desc { font-family: var(--font-retro); font-size: 18px; color: var(--color-text); margin-bottom: 6px; line-height: 1.4; }
+.detail-row-info { font-family: var(--font-retro); font-size: 16px; color: var(--color-text-dim); margin-bottom: 6px; }
+.detail-b58-row { font-family: var(--font-retro); font-size: 16px; color: var(--color-text-dim); margin-bottom: 6px; }
+.b58-code {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  padding: 2px 6px;
+  color: var(--color-info);
+  cursor: pointer;
+  word-break: break-all;
+}
+.b58-code:hover { color: var(--color-accent); border-color: var(--color-accent); }
+.copy-hint { font-size: 14px; color: var(--color-text-dim); }
+
+.params-details { margin-top: 6px; }
+.params-details summary {
+  font-family: var(--font-retro);
+  font-size: 16px;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  padding: 2px 0;
+}
+.params-details summary:hover { color: var(--color-accent); }
+.params-pre {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--color-text-dim);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  padding: 10px;
+  margin-top: 6px;
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon"></div>
+    SFX STUDY
+  </div>
+  <div class="admin-badge">ADMIN</div>
+</header>
+
+<main>
+
+  <!-- Login -->
+  <div id="loginSection">
+    <h2>ADMIN LOGIN</h2>
+    <label for="secretInput">Admin Secret</label>
+    <input type="password" id="secretInput" placeholder="Enter secret…" />
+    <button class="px-btn" onclick="login()">▶ ENTER</button>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashSection">
+    <div class="dash-header">
+      <div>
+        <div class="dash-title">PARTICIPANT DATA</div>
+        <div id="lastUpdated" class="dash-meta">Loading…</div>
+      </div>
+      <div class="btn-row">
+        <button class="px-btn" onclick="fetchData()">↺ REFRESH</button>
+        <button class="px-btn" onclick="downloadCSV()">↓ CSV</button>
+        <button class="px-btn" onclick="downloadJSON()">↓ JSON</button>
+        <button class="px-btn secondary" onclick="clearSecret()">✕ LOGOUT</button>
+      </div>
+    </div>
+
+    <div id="statusMsg"></div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>PID</th>
+            <th>TASK 1</th>
+            <th>TASK 2</th>
+            <th>TASK 3</th>
+            <th>STATUS</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr><td colspan="5" style="text-align:center;padding:20px;font-family:var(--font-retro);font-size:18px;color:var(--color-text-dim)">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-family:var(--font-retro);font-size:16px;color:var(--color-text-dim);margin-top:10px;">Click any row to expand details. Auto-refreshes every 30 seconds.</p>
+  </div>
+
+</main>
+</body>
+</html>
