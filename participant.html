@@ -277,8 +277,10 @@ async function initStudy() {
     }
   }
 
-  // Find starting step (first null result)
-  study.step = study.data.results.findIndex(r => r === null);
+  // Find starting step (first null result); guard against missing field
+  const results = study.data.results || [null, null, null];
+  study.data.results = results;
+  study.step = results.findIndex(r => r === null);
   if (study.step === -1) { showComplete(); return; }
 
   document.getElementById('loadingOverlay').style.display = 'none';

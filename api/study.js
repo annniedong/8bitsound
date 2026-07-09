@@ -14,6 +14,14 @@ async function fbPut(path, data) {
   });
 }
 
+// Firebase strips null values, so we store results as a keyed object
+// and reconstruct the 3-element array on read.
+function normalize(p) {
+  if (!p) return null;
+  const r = p.results || {};
+  return { ...p, results: [r[0] || null, r[1] || null, r[2] || null] };
+}
+
 function shuffle(arr) {
   var a = arr.slice();
   for (var i = a.length - 1; i > 0; i--) {
@@ -42,7 +50,7 @@ module.exports = async function handler(req, res) {
       const { secret } = req.query;
       if (secret !== ADMIN_SECRET) return res.status(401).json({ error: 'Unauthorized' });
       const all = await fbGet('participants');
-      const participants = all ? Object.values(all) : [];
+      const participants = all ? Object.values(all).map(normalize).filter(Boolean) : [];
       return res.json({ participants });
     }
 
@@ -51,22 +59,23 @@ module.exports = async function handler(req, res) {
 
       if (action === 'init') {
         if (!id) return res.status(400).json({ error: 'Missing id' });
-        let participant = await fbGet(`participants/${id}`);
-        if (participant) return res.json(participant);
-        participant = {
+        const existing = await fbGet(`participants/${id}`);
+        if (existing) return res.json(normalize(existing));
+        const participant = {
           id,
           createdAt: new Date().toISOString(),
           assignments: generateAssignments(),
-          results: [null, null, null],
+          results: {},  // keyed object avoids Firebase null-stripping
         };
         await fbPut(`participants/${id}`, participant);
-        return res.json(participant);
+        return res.json(normalize(participant));
       }
 
       if (action === 'result') {
         if (!id) return res.status(400).json({ error: 'Missing id' });
         const participant = await fbGet(`participants/${id}`);
         if (!participant) return res.status(404).json({ error: 'Participant not found' });
+        if (!participant.results) participant.results = {};
         participant.results[taskIndex] = { ...result, completedAt: new Date().toISOString() };
         await fbPut(`participants/${id}`, participant);
         return res.json({ ok: true });
