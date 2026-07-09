@@ -24,23 +24,32 @@ function getSecret() { return sessionStorage.getItem('sfx-admin-secret'); }
 function setSecret(s) { sessionStorage.setItem('sfx-admin-secret', s); }
 function clearSecret() { sessionStorage.removeItem('sfx-admin-secret'); location.reload(); }
 
-async function addParticipant() {
-  const pid = prompt('Participant ID (leave blank to auto-generate):');
-  if (pid === null) return; // cancelled
-  const id = pid.trim().toUpperCase() || 'P' + Math.random().toString(36).slice(2,6).toUpperCase();
-  const secret = getSecret();
+function addParticipant() {
+  document.getElementById('newPidInput').value = '';
+  document.getElementById('newPidModal').style.display = 'flex';
+  document.getElementById('newPidInput').focus();
+}
+
+function closeModal() {
+  document.getElementById('newPidModal').style.display = 'none';
+}
+
+async function confirmNewParticipant() {
+  const raw = document.getElementById('newPidInput').value.trim().toUpperCase();
+  const id  = raw || 'P' + Math.random().toString(36).slice(2,6).toUpperCase();
+  closeModal();
   try {
     const res = await fetch(window.STUDY_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'init', id, secret }),
+      body: JSON.stringify({ action: 'init', id }),
     });
     const data = await res.json();
-    if (data.error) { alert('Error: ' + data.error); return; }
+    if (data.error) { document.getElementById('statusMsg').textContent = 'Error: ' + data.error; return; }
     await fetchData();
-    alert('Created participant ' + data.id + '\nParticipant link:\n' + location.origin + '/participant.html?pid=' + encodeURIComponent(data.id));
+    window.open(location.origin + '/8bitsound/participant.html?pid=' + encodeURIComponent(data.id), '_blank');
   } catch (e) {
-    alert('Error: ' + e.message);
+    document.getElementById('statusMsg').textContent = 'Error: ' + e.message;
   }
 }
 
@@ -186,6 +195,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   document.getElementById('secretInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') login();
+  });
+  document.getElementById('newPidInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmNewParticipant();
+    if (e.key === 'Escape') closeModal();
   });
 });
 </script>
@@ -439,6 +452,59 @@ tr.detail-row td { padding: 0; background: var(--color-surface-2); border-bottom
   overflow-y: auto;
   white-space: pre;
 }
+/* ── New participant modal ── */
+#newPidModal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-box {
+  background: var(--color-surface);
+  border: 3px solid var(--color-accent);
+  box-shadow: 6px 6px 0 var(--color-btn-shadow);
+  padding: 28px 32px;
+  width: 380px;
+  max-width: 90vw;
+}
+.modal-title {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--color-accent);
+  letter-spacing: 3px;
+  margin-bottom: 18px;
+}
+.modal-label {
+  font-family: var(--font-retro);
+  font-size: 19px;
+  color: var(--color-text-dim);
+  display: block;
+  margin-bottom: 8px;
+  letter-spacing: 1px;
+}
+.modal-input {
+  width: 100%;
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  padding: 10px;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  border: 2px solid var(--color-border);
+  outline: none;
+  margin-bottom: 6px;
+  letter-spacing: 2px;
+}
+.modal-input:focus { border-color: var(--color-accent); }
+.modal-hint {
+  font-family: var(--font-retro);
+  font-size: 15px;
+  color: var(--color-text-dim);
+  margin-bottom: 18px;
+}
+.modal-btns { display: flex; gap: 8px; }
 </style>
 </head>
 <body>
@@ -499,5 +565,19 @@ tr.detail-row td { padding: 0; background: var(--color-surface-2); border-bottom
   </div>
 
 </main>
+
+<div id="newPidModal">
+  <div class="modal-box">
+    <div class="modal-title">NEW PARTICIPANT</div>
+    <label class="modal-label" for="newPidInput">Participant ID</label>
+    <input class="modal-input" id="newPidInput" placeholder="e.g. P001" maxlength="16" />
+    <div class="modal-hint">Leave blank to auto-generate.</div>
+    <div class="modal-btns">
+      <button class="px-btn" onclick="confirmNewParticipant()">▶ CREATE + OPEN</button>
+      <button class="px-btn secondary" onclick="closeModal()">✕ CANCEL</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
