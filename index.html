@@ -6,6 +6,7 @@
 <title>SFX Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<script src="config.js"></script>
 <script src="riffwave.js"></script>
 <script src="sfxr.js"></script>
 <script>
@@ -218,6 +219,12 @@ async function sendChat() {
   const text    = input.value.trim();
   if (!text) return;
 
+  const apiUrl = window.CHAT_API_URL;
+  if (!apiUrl || apiUrl.includes('your-vercel-app')) {
+    chatAppend('ai', 'ERROR: Set your backend URL in config.js.');
+    return;
+  }
+
   input.value = '';
   chatAppend('user', text);
   chatHistory.push({ role: 'user', content: text });
@@ -227,11 +234,12 @@ async function sendChat() {
   const loading = chatAppend('ai', '···');
 
   try {
-    const res = await fetch('/api/chat', {
+    const res = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: chatHistory }),
     });
+
     const data = await res.json();
     if (!res.ok) { loading.textContent = 'ERROR: ' + (data.error || 'API error'); return; }
 
@@ -241,7 +249,7 @@ async function sendChat() {
     chatHistory.push({ role: 'assistant', content: JSON.stringify(data) });
     data.mutate ? mut() : gen(sound);
   } catch (e) {
-    loading.textContent = 'ERROR: Could not reach AI.';
+    loading.textContent = 'ERROR: Could not reach backend.';
   } finally {
     sendBtn.disabled    = false;
     sendBtn.textContent = '▶';

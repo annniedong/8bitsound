@@ -1,25 +1,4 @@
-require('dotenv').config();
-const express = require('express');
-const path = require('path');
-
-const app = express();
-const PORT = process.env.PORT || 8080;
-
-app.use(express.json());
-app.use(express.static(path.join(__dirname)));
-
-app.post('/api/chat', async (req, res) => {
-  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-  if (!OPENAI_API_KEY) {
-    return res.status(500).json({ error: 'OPENAI_API_KEY not set on server' });
-  }
-
-  const { messages } = req.body;
-  if (!Array.isArray(messages)) {
-    return res.status(400).json({ error: 'messages must be an array' });
-  }
-
-  const system = `You are an 8-bit sound design AI for a retro game sound effects studio.
+const SYSTEM = `You are an 8-bit sound design AI for a retro game sound effects studio.
 Users describe sounds they want. Pick the best preset and write a short energetic message.
 
 Available presets:
@@ -44,19 +23,30 @@ Respond ONLY with valid JSON:
 
 Set "mutate": true only if user says variation/mutate/different version of current.`;
 
+module.exports = async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', 'https://annniedong.github.io');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return res.status(500).json({ error: 'API key not configured on server' });
+
+  const { messages } = req.body;
+  if (!Array.isArray(messages)) return res.status(400).json({ error: 'messages must be an array' });
+
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${key}`,
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: system },
-          ...messages.slice(-6),
-        ],
+        messages: [{ role: 'system', content: SYSTEM }, ...messages.slice(-6)],
         max_tokens: 120,
         temperature: 0.7,
         response_format: { type: 'json_object' },
@@ -74,12 +64,4 @@ Set "mutate": true only if user says variation/mutate/different version of curre
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
-
-app.listen(PORT, () => {
-  console.log(`\n  SFX STUDIO\n`);
-  console.log(`  http://localhost:${PORT}`);
-  console.log(`  Level 1 (manual only):    ?level=1`);
-  console.log(`  Level 2 (presets):        ?level=2`);
-  console.log(`  Level 3 (AI assistant):   ?level=3\n`);
-});
+};
