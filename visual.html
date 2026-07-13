@@ -199,6 +199,26 @@ body.mode-chat .workspace { grid-template-columns: minmax(420px,1fr) 330px 310px
 .disabled-workspace { opacity: .55; filter: grayscale(.25); }
 .disabled-workspace canvas { pointer-events: none; }
 
+/* ── P4 slider restrictions ── */
+[data-param-set="reduced"] #slider-pixelJitter,
+[data-param-set="reduced"] #slider-ditherAmount,
+[data-param-set="reduced"] #slider-highlightStrength,
+[data-param-set="reduced"] #slider-shadowStrength,
+[data-param-set="reduced"] #slider-detailDensity,
+[data-param-set="reduced"] #slider-glowAmount { display: none; }
+
+[data-param-set="minimal"] #slider-complexity,
+[data-param-set="minimal"] #slider-outline,
+[data-param-set="minimal"] #slider-pixelJitter,
+[data-param-set="minimal"] #slider-paletteCount,
+[data-param-set="minimal"] #slider-contrast,
+[data-param-set="minimal"] #slider-saturation,
+[data-param-set="minimal"] #slider-ditherAmount,
+[data-param-set="minimal"] #slider-highlightStrength,
+[data-param-set="minimal"] #slider-shadowStrength,
+[data-param-set="minimal"] #slider-detailDensity,
+[data-param-set="minimal"] #slider-glowAmount { display: none; }
+
 /* ── Loading overlay ── */
 #loadingOverlay {
   position: fixed; inset: 0; background: var(--bg);
@@ -212,19 +232,27 @@ body.mode-chat .workspace { grid-template-columns: minmax(420px,1fr) 330px 310px
 #loadingOverlay .load-error { color: var(--danger); animation: none; font-size: 13px; font-family: monospace; max-width: 500px; text-align: center; }
 @keyframes hudpulse { from { opacity: 1; } to { opacity: .4; } }
 
-/* ── Complete overlay ── */
-#studyComplete {
+/* ── Transition + Complete overlays ── */
+#p3Complete, #studyComplete {
   position: fixed; inset: 0; background: rgba(0,0,0,.85);
   display: none; align-items: center; justify-content: center; z-index: 3000;
 }
 .complete-box {
   background: var(--panel); border: 3px solid var(--color-accent);
-  box-shadow: var(--shadow); padding: 40px 48px; text-align: center; max-width: 480px;
+  box-shadow: var(--shadow); padding: 40px 48px; text-align: center; max-width: 520px;
 }
 .complete-box h2 { font-family: var(--font-pixel); font-size: 14px; color: var(--color-accent); letter-spacing: 3px; margin-bottom: 20px; }
 .complete-box p { font-family: var(--font-retro); font-size: 22px; color: var(--text); margin-bottom: 12px; }
 .complete-pid { font-family: var(--font-pixel); font-size: 8px; color: var(--color-text-dim); letter-spacing: 2px; margin-top: 20px; }
 .complete-pid span { color: var(--color-accent); }
+.complete-btn {
+  display: inline-block; margin-top: 24px; padding: 12px 24px;
+  font-family: var(--font-pixel); font-size: 9px; letter-spacing: 2px;
+  background: var(--color-accent); color: var(--color-bg);
+  border: 2px solid var(--color-accent); cursor: pointer;
+  box-shadow: var(--px-shadow);
+}
+.complete-btn:hover { opacity: .85; }
 
 /* ── HUD ── */
 #visualHud {
@@ -257,9 +285,20 @@ body.mode-chat .workspace { grid-template-columns: minmax(420px,1fr) 330px 310px
 <!-- HUD -->
 <div id="visualHud" style="display:none">
   <div class="hud-pid">ID: <span id="hudPid">—</span></div>
-  <div class="hud-step" id="hudStep">P3 — TASK 1/6</div>
+  <div class="hud-step" id="hudStep">P3 — TASK 1/3</div>
   <div class="hud-timer" id="hudTimer">03:00</div>
   <button class="hud-early-btn" onclick="submitEarlyVisual()">Submit Early</button>
+</div>
+
+<!-- P3 → P4 Transition -->
+<div id="p3Complete">
+  <div class="complete-box">
+    <h2>PART 3 COMPLETE!</h2>
+    <p>You've finished the visual AI-level tasks.</p>
+    <p style="font-size:17px;color:var(--muted)">Part 4 restricts the design space itself — you'll use the AI assistant but with fewer controls available.</p>
+    <button class="complete-btn" onclick="startP4()">▶ START PART 4</button>
+    <div class="complete-pid">PARTICIPANT ID: <span id="p3CompletePid">—</span></div>
+  </div>
 </div>
 
 <!-- Study Complete -->
@@ -276,7 +315,7 @@ body.mode-chat .workspace { grid-template-columns: minmax(420px,1fr) 330px 310px
   <!-- Topbar -->
   <div class="topbar">
     <div>
-      <p class="eyebrow">Part 3 · Visual Study</p>
+      <p class="eyebrow" id="partLabel">Part 3 · Visual Study</p>
       <h1>PixelForge</h1>
       <p class="subtitle">8-bit pixel-art sprite studio</p>
     </div>
@@ -431,28 +470,28 @@ body.mode-chat .workspace { grid-template-columns: minmax(420px,1fr) 330px 310px
 
 <script>
 // ── Study constants ───────────────────────────────────────────────────────────
-const taskPrompts = [
-  { id:'broken-key',       title:'Broken Magic Key',        prompt:'Create a small pixel-art key that looks magical but slightly broken. It should include at least two colors, an uneven silhouette, and one manually placed detail.' },
-  { id:'character-loot',   title:'Character Loot',          prompt:'Create a piece of loot that a powerful character might drop if defeated in battle. It should feel valuable, include at least two colors, and have a unique silhouette.' },
-  { id:'glitch-creature',  title:'Friendly Glitch Creature', prompt:'Create a tiny creature that feels friendly but glitchy and have a futuristic vibe. It should have at least one face-like feature, one irregular edge, and a color palette that is not plain green slime.' },
-  { id:'ancient-relic',    title:'Ancient Tech Relic',       prompt:'Create an ancient technology relic. It should feel old and mechanical, include a glowing element, and not look like only a gem, sword, or coin.' },
-  { id:'mythical-creature',title:'Mythical Creature',        prompt:'Create a mythical creature that feels otherworldly and powerful. It should include at least two colors, a unique silhouette, and a sense of magic or danger.' },
-  { id:'unique-pet',       title:'Unique Pet',               prompt:'Create a unique pet: if you could have ANY pet (real or mythical or your own creation, what would it be?). It should feel special, include at least two colors, and have a distinctive silhouette.' },
+const P3_TASKS = [
+  { id:'broken-key',      title:'Broken Magic Key',         prompt:'Create a small pixel-art key that looks magical but slightly broken. It should include at least two colors, an uneven silhouette, and one manually placed detail.' },
+  { id:'character-loot',  title:'Character Loot',           prompt:'Create a piece of loot that a powerful character might drop if defeated in battle. It should feel valuable, include at least two colors, and have a unique silhouette.' },
+  { id:'glitch-creature', title:'Friendly Glitch Creature',  prompt:'Create a tiny creature that feels friendly but glitchy and have a futuristic vibe. It should have at least one face-like feature, one irregular edge, and a color palette that is not plain green slime.' },
 ];
 
-const modeOrders = {
-  A: ['manual','manual','chat','chat','preset','preset'],
-  B: ['chat','chat','preset','preset','manual','manual'],
-  C: ['preset','preset','manual','manual','chat','chat'],
-};
+const P4_TASKS = [
+  { id:'ancient-relic',    title:'Ancient Tech Relic',   prompt:'Create an ancient technology relic. It should feel old and mechanical, include a glowing element, and not look like only a gem, sword, or coin.' },
+  { id:'mythical-creature',title:'Mythical Creature',    prompt:'Create a mythical creature that feels otherworldly and powerful. It should include at least two colors, a unique silhouette, and a sense of magic or danger.' },
+  { id:'unique-pet',       title:'Unique Pet',           prompt:'Create a unique pet: if you could have ANY pet (real or mythical or your own creation, what would it be?). It should feel special, include at least two colors, and have a distinctive silhouette.' },
+];
 
 const TASK_DURATION_SECONDS = 180;
 
 // ── Study state ───────────────────────────────────────────────────────────────
 let pid = null;
 let participantData = null;
-let studyTasks = [];
-let currentTaskIndex = 0;
+let visualPart = 1;   // 1 = P3, 2 = P4
+let p3step = 0;
+let p4step = 0;
+let p3Tasks = [];     // built from p3assignments
+let p4Tasks = [];     // built from p4assignments
 let taskStarted = false;
 let taskStartTime = null;
 let taskTimeLeft = TASK_DURATION_SECONDS;
@@ -562,26 +601,40 @@ async function boot() {
     if (data.error) { showLoadError('API error: ' + data.error); return; }
     participantData = data;
 
-    const order = (data.p3assignments || {}).order || 'A';
-    const modes = modeOrders[order] || modeOrders.A;
-    studyTasks = taskPrompts.map((t, i) => ({ ...t, number: i+1, mode: modes[i] }));
+    // Build task lists from assignments
+    const p3a = data.p3assignments || [];
+    const p4a = data.p4assignments || [];
+    p3Tasks = p3a.map((a, i) => ({ ...P3_TASKS[a.task], number: i+1, level: a.level }));
+    p4Tasks = p4a.map((a, i) => ({ ...P4_TASKS[a.task], number: i+1, paramSet: a.paramSet }));
 
-    // Resume from first incomplete task
-    const p3results = data.p3results || [];
-    currentTaskIndex = p3results.findIndex(r => r === null);
-    if (currentTaskIndex === -1) {
-      if (p3results.filter(r => r !== null).length >= 6) {
-        showStudyComplete();
-        document.getElementById('loadingOverlay').style.display = 'none';
-        return;
-      }
-      currentTaskIndex = 0;
+    // Resume: find first incomplete step
+    const p3results = data.p3results || [null, null, null];
+    const p4results = data.p4results || [null, null, null];
+    const p3done = p3results.filter(r => r !== null).length;
+    const p4done = p4results.filter(r => r !== null).length;
+
+    if (p3done >= 3 && p4done >= 3) {
+      showStudyComplete();
+      document.getElementById('loadingOverlay').style.display = 'none';
+      return;
+    }
+
+    if (p3done >= 3) {
+      // Skip to P4
+      visualPart = 2;
+      p4step = p4results.findIndex(r => r === null);
+      if (p4step === -1) p4step = 0;
+    } else {
+      visualPart = 1;
+      p3step = p3results.findIndex(r => r === null);
+      if (p3step === -1) p3step = 0;
     }
 
     // Init UI
     document.getElementById('hudPid').textContent = pid;
     document.getElementById('topPid').textContent = `PID: ${pid}`;
     document.getElementById('completePid').textContent = pid;
+    document.getElementById('p3CompletePid').textContent = pid;
 
     buildSliders();
     syncControlsFromParams();
@@ -604,12 +657,18 @@ function showLoadError(msg) {
 
 // ── Task flow ─────────────────────────────────────────────────────────────────
 function loadCurrentTask() {
-  if (currentTaskIndex >= studyTasks.length) { showStudyComplete(); return; }
-  const task = studyTasks[currentTaskIndex];
+  setParamSet('');
+  const isP4 = visualPart === 2;
+  const task = isP4 ? p4Tasks[p4step] : p3Tasks[p3step];
+  const stepNum = isP4 ? p4step : p3step;
 
-  controls.taskTitle.textContent  = `Task ${task.number} · ${task.title}`;
+  if (!task) { showStudyComplete(); return; }
+
+  document.getElementById('partLabel').textContent = isP4 ? 'Part 4 · Visual Study' : 'Part 3 · Visual Study';
+  controls.taskTitle.textContent  = `Task ${stepNum + 1} · ${task.title}`;
   controls.taskPrompt.textContent = task.prompt;
   controls.taskTimer.textContent  = formatTime(TASK_DURATION_SECONDS);
+  controls.taskTimer.style.color  = '';
   controls.taskTimer.className    = '';
 
   taskStarted   = false;
@@ -619,11 +678,25 @@ function loadCurrentTask() {
   controls.startTaskBtn.disabled  = false;
   controls.finishTaskBtn.disabled = true;
 
-  setStudyMode(task.mode);
+  if (isP4) {
+    setStudyMode('chat', true);
+    setParamSet(task.paramSet);
+    const noteMap = {
+      full:    '<strong>Part 4 · Full Controls:</strong> All sliders and the AI assistant are available.',
+      reduced: '<strong>Part 4 · Reduced Controls:</strong> Core sliders are available. Advanced effect controls are hidden. AI assistant is active.',
+      minimal: '<strong>Part 4 · Minimal Controls:</strong> Only Fill Ratio and Palette Hue are adjustable. AI assistant is active.',
+    };
+    controls.studyNote.innerHTML = noteMap[task.paramSet] || noteMap.full;
+    controls.conditionLabel.textContent = `${task.paramSet.charAt(0).toUpperCase() + task.paramSet.slice(1)} controls + AI assistant`;
+  } else {
+    setStudyMode(task.level);
+  }
+
   resetSpriteForTask();
   setWorkspaceEnabled(false);
 
-  document.getElementById('hudStep').textContent  = `P3 — TASK ${currentTaskIndex+1}/6`;
+  const hudLabel = isP4 ? `P4 — TASK ${p4step+1}/3` : `P3 — TASK ${p3step+1}/3`;
+  document.getElementById('hudStep').textContent  = hudLabel;
   document.getElementById('hudTimer').textContent = formatTime(TASK_DURATION_SECONDS);
   document.getElementById('hudTimer').className   = 'hud-timer';
 }
@@ -664,14 +737,17 @@ async function finishCurrentTask(autoSubmitted=false) {
   if (!taskStarted && !autoSubmitted) return;
   clearInterval(taskTimerInterval);
 
-  const task = studyTasks[currentTaskIndex];
+  const isP4 = visualPart === 2;
+  const task = isP4 ? p4Tasks[p4step] : p3Tasks[p3step];
+  const stepNum = isP4 ? p4step : p3step;
   const elapsedSeconds = taskStartTime ? Math.round((Date.now()-taskStartTime)/1000) : 0;
 
   const result = {
-    taskIndex: currentTaskIndex,
+    taskIndex: stepNum,
     taskId:    task.id,
     title:     task.title,
-    mode:      task.mode,
+    mode:      isP4 ? 'chat' : task.level,
+    paramSet:  isP4 ? task.paramSet : undefined,
     prompt:    task.prompt,
     autoSubmitted,
     elapsedSeconds,
@@ -688,15 +764,29 @@ async function finishCurrentTask(autoSubmitted=false) {
     await fetch(window.STUDY_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action:'result3', id:pid, taskIndex:currentTaskIndex, result }),
+      body: JSON.stringify({
+        action: isP4 ? 'result4' : 'result3',
+        id: pid,
+        taskIndex: stepNum,
+        result,
+      }),
     });
   } catch(e) {}
 
-  currentTaskIndex++;
-  if (currentTaskIndex >= studyTasks.length) {
-    showStudyComplete();
+  if (isP4) {
+    p4step++;
+    if (p4step >= 3) {
+      showStudyComplete();
+    } else {
+      loadCurrentTask();
+    }
   } else {
-    loadCurrentTask();
+    p3step++;
+    if (p3step >= 3) {
+      showP3Complete();
+    } else {
+      loadCurrentTask();
+    }
   }
 }
 
@@ -706,25 +796,45 @@ function submitEarlyVisual() {
   finishCurrentTask(false);
 }
 
+function showP3Complete() {
+  document.getElementById('visualHud').style.display = 'none';
+  document.getElementById('p3Complete').style.display = 'flex';
+}
+
+function startP4() {
+  visualPart = 2;
+  p4step = 0;
+  document.getElementById('p3Complete').style.display = 'none';
+  document.getElementById('visualHud').style.display = 'block';
+  loadCurrentTask();
+}
+
 function showStudyComplete() {
   document.getElementById('visualHud').style.display = 'none';
+  document.getElementById('p3Complete').style.display = 'none';
   document.getElementById('studyComplete').style.display = 'flex';
 }
 
+function setParamSet(ps) {
+  document.documentElement.dataset.paramSet = ps || '';
+}
+
 // ── Mode / UI ─────────────────────────────────────────────────────────────────
-function setStudyMode(mode) {
+function setStudyMode(mode, skipNote=false) {
   studyMode = mode;
   document.body.classList.remove('mode-manual','mode-preset','mode-chat');
   document.body.classList.add(`mode-${mode}`);
-  if (mode === 'manual') {
-    controls.studyNote.innerHTML = '<strong>Level 1 · Manual only:</strong> Use sliders and shape controls to design your sprite. The preset toolbar and chat assistant are hidden.';
-    controls.conditionLabel.textContent = 'Manual design space only';
-  } else if (mode === 'preset') {
-    controls.studyNote.innerHTML = '<strong>Level 2 · Preset assistance:</strong> Generate a base sprite with a preset, then refine with the manual controls.';
-    controls.conditionLabel.textContent = 'Manual controls + algorithmic preset toolbar';
-  } else {
-    controls.studyNote.innerHTML = '<strong>Level 3 · Chat assistance:</strong> Use the chat assistant to describe the sprite you want. The preset toolbar is hidden.';
-    controls.conditionLabel.textContent = 'Manual controls + chat assistant';
+  if (!skipNote) {
+    if (mode === 'manual') {
+      controls.studyNote.innerHTML = '<strong>Level 1 · Manual only:</strong> Use sliders and shape controls to design your sprite. The preset toolbar and chat assistant are hidden.';
+      controls.conditionLabel.textContent = 'Manual design space only';
+    } else if (mode === 'preset') {
+      controls.studyNote.innerHTML = '<strong>Level 2 · Preset assistance:</strong> Generate a base sprite with a preset, then refine with the manual controls.';
+      controls.conditionLabel.textContent = 'Manual controls + algorithmic preset toolbar';
+    } else {
+      controls.studyNote.innerHTML = '<strong>Level 3 · Chat assistance:</strong> Use the chat assistant to describe the sprite you want. The preset toolbar is hidden.';
+      controls.conditionLabel.textContent = 'Manual controls + chat assistant';
+    }
   }
   syncControlsFromParams();
   render();
@@ -832,7 +942,7 @@ function paletteColor(role) {
 function buildSliders() {
   controls.sliderControls.innerHTML='';
   for(const [key,label,min,max,step] of sliderDefs){
-    const row=document.createElement('div'); row.className='slider-row';
+    const row=document.createElement('div'); row.className='slider-row'; row.id='slider-'+key;
     row.innerHTML=`<div class="slider-top"><span>${label}</span><output id="${key}Value"></output></div><input type="range" id="${key}" min="${min}" max="${max}" step="${step}" />`;
     controls.sliderControls.appendChild(row);
   }

@@ -24,12 +24,13 @@ const P2_TASKS = [
 const P2_TASK_SHORT = ["Invisible Walker", "Infinite Well", "Future Instr."];
 const PARAM_SET_NAMES = { full: "Full", reduced: "Reduced", minimal: "Minimal" };
 
-const P3_TASK_TITLES = ['Broken Magic Key','Character Loot','Friendly Glitch Creature','Ancient Tech Relic','Mythical Creature','Unique Pet'];
-const P3_MODE_ORDERS = {
-  A: ['manual','manual','chat','chat','preset','preset'],
-  B: ['chat','chat','preset','preset','manual','manual'],
-  C: ['preset','preset','manual','manual','chat','chat'],
-};
+const P3_TASKS_SHORT = ['Magic Key', 'Loot', 'Glitch Creature'];
+const P3_LEVEL_NAMES = { manual: 'L1 Manual', preset: 'L2 Presets', chat: 'L3 AI' };
+const P3_TASK_FULL = ['Broken Magic Key', 'Character Loot', 'Friendly Glitch Creature'];
+
+const P4_TASKS_SHORT = ['Ancient Relic', 'Mythical Creature', 'Unique Pet'];
+const P4_TASK_FULL = ['Ancient Tech Relic', 'Mythical Creature', 'Unique Pet'];
+const P4_PARAM_SET_NAMES = { full: 'Full', reduced: 'Reduced', minimal: 'Minimal' };
 
 let participants = [];
 let reloadInterval = null;
@@ -101,16 +102,16 @@ function renderTable() {
   const tbody = document.getElementById('tableBody');
   tbody.innerHTML = '';
   if (!participants.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;font-family:var(--font-retro);font-size:18px;color:var(--color-text-dim)">No participants yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:20px;font-family:var(--font-retro);font-size:18px;color:var(--color-text-dim)">No participants yet.</td></tr>';
     return;
   }
   participants.forEach(p => {
     const p1done = (p.results   || []).filter(r => r !== null).length;
     const p2done = (p.p2results || []).filter(r => r !== null).length;
     const p3done = (p.p3results || []).filter(r => r !== null).length;
-    const allDone = p1done >= 3 && p2done >= 3 && p3done >= 6;
-    const p3order = (p.p3assignments || {}).order || '?';
-    const status = allDone ? 'Done' : `P1:${p1done}/3 P2:${p2done}/3 P3:${p3done}/6`;
+    const p4done = (p.p4results || []).filter(r => r !== null).length;
+    const allDone = p1done >= 3 && p2done >= 3 && p3done >= 3 && p4done >= 3;
+    const status = allDone ? 'Done' : `P1:${p1done}/3 P2:${p2done}/3 P3:${p3done}/3 P4:${p4done}/3`;
     const tr = document.createElement('tr');
     tr.className = 'data-row' + (expandedPid === p.id ? ' expanded' : '');
     tr.onclick = () => toggleExpand(p.id);
@@ -130,7 +131,20 @@ function renderTable() {
       const check = r2 ? '<span class="check">✓</span>' : '<span class="dash">—</span>';
       cells += `<td>${label}<br>${check}</td>`;
     }
-    cells += `<td>Order ${p3order}<br><span style="font-size:14px">${p3done}/6 done</span></td>`;
+    for (let i = 0; i < 3; i++) {
+      const a3 = (p.p3assignments || [])[i] || {};
+      const r3 = (p.p3results     || [])[i];
+      const label = a3.task !== undefined ? `${P3_TASKS_SHORT[a3.task]} — ${P3_LEVEL_NAMES[a3.level] || a3.level}` : '—';
+      const check = r3 ? '<span class="check">✓</span>' : '<span class="dash">—</span>';
+      cells += `<td>${label}<br>${check}</td>`;
+    }
+    for (let i = 0; i < 3; i++) {
+      const a4 = (p.p4assignments || [])[i] || {};
+      const r4 = (p.p4results     || [])[i];
+      const label = a4.task !== undefined ? `${P4_TASKS_SHORT[a4.task]} — ${P4_PARAM_SET_NAMES[a4.paramSet] || a4.paramSet}` : '—';
+      const check = r4 ? '<span class="check">✓</span>' : '<span class="dash">—</span>';
+      cells += `<td>${label}<br>${check}</td>`;
+    }
     cells += `<td class="status-cell ${allDone ? 'done' : ''}">${status}</td>`;
     tr.innerHTML = cells;
     tbody.appendChild(tr);
@@ -138,7 +152,7 @@ function renderTable() {
     if (expandedPid === p.id) {
       const detailRow = document.createElement('tr');
       detailRow.className = 'detail-row';
-      detailRow.innerHTML = `<td colspan="10">${renderDetail(p)}</td>`;
+      detailRow.innerHTML = `<td colspan="15">${renderDetail(p)}</td>`;
       tbody.appendChild(detailRow);
     }
   });
@@ -148,7 +162,7 @@ function renderDetail(p) {
   let html = '<div class="detail-box">';
   html += `<div class="detail-meta">Created: ${new Date(p.createdAt).toLocaleString()}</div>`;
 
-  html += `<div class="detail-task-header" style="margin-bottom:8px;color:var(--color-info)">— PART 1 —</div>`;
+  html += `<div class="detail-task-header" style="margin-bottom:8px;color:var(--color-info)">— PART 1 · SOUND LEVELS —</div>`;
   for (let i = 0; i < 3; i++) {
     const a = (p.assignments || [])[i] || {};
     const r = (p.results     || [])[i];
@@ -167,7 +181,7 @@ function renderDetail(p) {
     html += '</div>';
   }
 
-  html += `<div class="detail-task-header" style="margin:16px 0 8px;color:var(--color-info)">— PART 2 —</div>`;
+  html += `<div class="detail-task-header" style="margin:16px 0 8px;color:var(--color-info)">— PART 2 · SOUND PARAM RESTRICTIONS —</div>`;
   for (let i = 0; i < 3; i++) {
     const a2 = (p.p2assignments || [])[i] || {};
     const r2 = (p.p2results     || [])[i];
@@ -186,20 +200,39 @@ function renderDetail(p) {
     html += '</div>';
   }
 
-  const p3order = (p.p3assignments || {}).order || '?';
-  const p3modes = P3_MODE_ORDERS[p3order] || [];
-  html += `<div class="detail-task-header" style="margin:16px 0 8px;color:var(--color-info)">— PART 3 · VISUAL (Order ${p3order}) —</div>`;
-  for (let i = 0; i < 6; i++) {
-    const r3 = (p.p3results || [])[i];
-    const mode = p3modes[i] || '?';
-    const title = P3_TASK_TITLES[i] || `Task ${i+1}`;
+  html += `<div class="detail-task-header" style="margin:16px 0 8px;color:var(--color-info)">— PART 3 · VISUAL LEVELS —</div>`;
+  for (let i = 0; i < 3; i++) {
+    const a3 = (p.p3assignments || [])[i] || {};
+    const r3 = (p.p3results     || [])[i];
     html += `<div class="detail-task">`;
-    html += `<div class="detail-task-header">P3 Task ${i+1}: ${title} — ${mode}</div>`;
+    if (a3.task !== undefined) {
+      html += `<div class="detail-task-header">P3 Task ${i+1}: ${P3_TASK_FULL[a3.task]} — ${P3_LEVEL_NAMES[a3.level] || a3.level}</div>`;
+    }
     if (r3) {
       const elapsed = r3.elapsedSeconds != null ? `${r3.elapsedSeconds}s` : '?';
       html += `<div class="detail-row-info">Completed: ${new Date(r3.completedAt).toLocaleString()} | ${r3.autoSubmitted ? 'Timed out' : 'Submitted'} | ${elapsed}</div>`;
       if (r3.finalParams) {
         html += `<details class="params-details"><summary>Visual Params JSON</summary><pre class="params-pre">${JSON.stringify(r3.finalParams, null, 2)}</pre></details>`;
+      }
+    } else {
+      html += `<div class="detail-row-info" style="color:var(--color-text-dim)">Not yet completed.</div>`;
+    }
+    html += '</div>';
+  }
+
+  html += `<div class="detail-task-header" style="margin:16px 0 8px;color:var(--color-info)">— PART 4 · VISUAL PARAM RESTRICTIONS —</div>`;
+  for (let i = 0; i < 3; i++) {
+    const a4 = (p.p4assignments || [])[i] || {};
+    const r4 = (p.p4results     || [])[i];
+    html += `<div class="detail-task">`;
+    if (a4.task !== undefined) {
+      html += `<div class="detail-task-header">P4 Task ${i+1}: ${P4_TASK_FULL[a4.task]} — ${P4_PARAM_SET_NAMES[a4.paramSet] || a4.paramSet} Controls</div>`;
+    }
+    if (r4) {
+      const elapsed = r4.elapsedSeconds != null ? `${r4.elapsedSeconds}s` : '?';
+      html += `<div class="detail-row-info">Completed: ${new Date(r4.completedAt).toLocaleString()} | ${r4.autoSubmitted ? 'Timed out' : 'Submitted'} | ${elapsed} | paramSet: ${r4.paramSet || a4.paramSet}</div>`;
+      if (r4.finalParams) {
+        html += `<details class="params-details"><summary>Visual Params JSON</summary><pre class="params-pre">${JSON.stringify(r4.finalParams, null, 2)}</pre></details>`;
       }
     } else {
       html += `<div class="detail-row-info" style="color:var(--color-text-dim)">Not yet completed.</div>`;
@@ -233,20 +266,23 @@ function downloadJSON() {
 }
 
 function downloadCSV() {
-  const rows = [['pid','part','stepIndex','taskName','level','paramSet','p3order','b58','timedOut','elapsedSeconds','completedAt']];
+  const rows = [['pid','part','stepIndex','taskName','level','paramSet','b58','timedOut','elapsedSeconds','completedAt']];
   participants.forEach(p => {
     (p.assignments || []).forEach((a, i) => {
       const r = (p.results || [])[i];
-      rows.push([p.id, 1, i, TASK_SHORT[a.task], a.level, '', '', r ? r.b58 : '', r ? r.timedOut : '', '', r ? r.completedAt : '']);
+      rows.push([p.id, 1, i, TASK_SHORT[a.task], a.level, '', r ? r.b58 : '', r ? r.timedOut : '', '', r ? r.completedAt : '']);
     });
     (p.p2assignments || []).forEach((a2, i) => {
       const r2 = (p.p2results || [])[i];
-      rows.push([p.id, 2, i, P2_TASK_SHORT[a2.task], 3, a2.paramSet, '', r2 ? r2.b58 : '', r2 ? r2.timedOut : '', '', r2 ? r2.completedAt : '']);
+      rows.push([p.id, 2, i, P2_TASK_SHORT[a2.task], 3, a2.paramSet, r2 ? r2.b58 : '', r2 ? r2.timedOut : '', '', r2 ? r2.completedAt : '']);
     });
-    const p3order = (p.p3assignments || {}).order || '';
-    const p3modes = P3_MODE_ORDERS[p3order] || [];
-    (p.p3results || []).forEach((r3, i) => {
-      rows.push([p.id, 3, i, P3_TASK_TITLES[i] || '', p3modes[i] || '', '', p3order, '', r3 ? r3.autoSubmitted : '', r3 ? r3.elapsedSeconds : '', r3 ? r3.completedAt : '']);
+    (p.p3assignments || []).forEach((a3, i) => {
+      const r3 = (p.p3results || [])[i];
+      rows.push([p.id, 3, i, P3_TASK_FULL[a3.task] || '', a3.level || '', '', '', r3 ? r3.autoSubmitted : '', r3 ? r3.elapsedSeconds : '', r3 ? r3.completedAt : '']);
+    });
+    (p.p4assignments || []).forEach((a4, i) => {
+      const r4 = (p.p4results || [])[i];
+      rows.push([p.id, 4, i, P4_TASK_FULL[a4.task] || '', 'chat', a4.paramSet || '', '', r4 ? r4.autoSubmitted : '', r4 ? r4.elapsedSeconds : '', r4 ? r4.completedAt : '']);
     });
   });
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
@@ -628,12 +664,17 @@ tr.detail-row td { padding: 0; background: var(--color-surface-2); border-bottom
             <th>P2 TASK 1</th>
             <th>P2 TASK 2</th>
             <th>P2 TASK 3</th>
-            <th>P3 VISUAL</th>
+            <th>P3 TASK 1</th>
+            <th>P3 TASK 2</th>
+            <th>P3 TASK 3</th>
+            <th>P4 TASK 1</th>
+            <th>P4 TASK 2</th>
+            <th>P4 TASK 3</th>
             <th>STATUS</th>
           </tr>
         </thead>
         <tbody id="tableBody">
-          <tr><td colspan="10" style="text-align:center;padding:20px;font-family:var(--font-retro);font-size:18px;color:var(--color-text-dim)">Loading…</td></tr>
+          <tr><td colspan="15" style="text-align:center;padding:20px;font-family:var(--font-retro);font-size:18px;color:var(--color-text-dim)">Loading…</td></tr>
         </tbody>
       </table>
     </div>

@@ -15,17 +15,19 @@ async function fbPut(path, data) {
 }
 
 // Firebase strips null values, so we store results as keyed objects
-// and reconstruct 3-element arrays on read.
+// and reconstruct fixed-length arrays on read.
 function normalize(p) {
   if (!p) return null;
   const r  = p.results   || {};
   const r2 = p.p2results || {};
   const r3 = p.p3results || {};
+  const r4 = p.p4results || {};
   return {
     ...p,
     results:   [r[0]  || null, r[1]  || null, r[2]  || null],
     p2results: [r2[0] || null, r2[1] || null, r2[2] || null],
-    p3results: [r3[0]||null, r3[1]||null, r3[2]||null, r3[3]||null, r3[4]||null, r3[5]||null],
+    p3results: [r3[0] || null, r3[1] || null, r3[2] || null],
+    p4results: [r4[0] || null, r4[1] || null, r4[2] || null],
   };
 }
 
@@ -38,26 +40,32 @@ function shuffle(arr) {
   return a;
 }
 
+// P1: sound tasks × AI levels
 function generateAssignments() {
   const tasks  = shuffle([0, 1, 2]);
   const levels = shuffle([1, 2, 3]);
   return tasks.map((task, i) => ({ task, level: levels[i] }));
 }
 
+// P2: sound tasks × param restriction sets
 function generateP2Assignments() {
   const tasks     = shuffle([0, 1, 2]);
   const paramSets = shuffle(['full', 'reduced', 'minimal']);
   return tasks.map((task, i) => ({ task, paramSet: paramSets[i] }));
 }
 
-async function generateP3Assignments() {
-  let counter = await fbGet('p3counter') || { A: 0, B: 0, C: 0 };
-  const minVal = Math.min(counter.A, counter.B, counter.C);
-  const least  = ['A', 'B', 'C'].filter(o => counter[o] === minVal);
-  const order  = least[Math.floor(Math.random() * least.length)];
-  counter[order] = (counter[order] || 0) + 1;
-  await fbPut('p3counter', counter);
-  return { order };
+// P3: visual tasks × AI levels (mirrors P1)
+function generateP3Assignments() {
+  const tasks  = shuffle([0, 1, 2]);
+  const levels = shuffle(['manual', 'preset', 'chat']);
+  return tasks.map((task, i) => ({ task, level: levels[i] }));
+}
+
+// P4: visual tasks × param restriction sets (mirrors P2)
+function generateP4Assignments() {
+  const tasks     = shuffle([0, 1, 2]);
+  const paramSets = shuffle(['full', 'reduced', 'minimal']);
+  return tasks.map((task, i) => ({ task, paramSet: paramSets[i] }));
 }
 
 module.exports = async function handler(req, res) {
@@ -91,8 +99,13 @@ module.exports = async function handler(req, res) {
             dirty = true;
           }
           if (!existing.p3assignments) {
-            existing.p3assignments = await generateP3Assignments();
+            existing.p3assignments = generateP3Assignments();
             existing.p3results = existing.p3results || {};
+            dirty = true;
+          }
+          if (!existing.p4assignments) {
+            existing.p4assignments = generateP4Assignments();
+            existing.p4results = existing.p4results || {};
             dirty = true;
           }
           if (dirty) await fbPut(`participants/${id}`, existing);
@@ -105,8 +118,10 @@ module.exports = async function handler(req, res) {
           results:       {},
           p2assignments: generateP2Assignments(),
           p2results:     {},
-          p3assignments: await generateP3Assignments(),
+          p3assignments: generateP3Assignments(),
           p3results:     {},
+          p4assignments: generateP4Assignments(),
+          p4results:     {},
         };
         await fbPut(`participants/${id}`, participant);
         return res.json(normalize(participant));
@@ -138,6 +153,16 @@ module.exports = async function handler(req, res) {
         if (!participant) return res.status(404).json({ error: 'Participant not found' });
         if (!participant.p3results) participant.p3results = {};
         participant.p3results[taskIndex] = { ...result, completedAt: new Date().toISOString() };
+        await fbPut(`participants/${id}`, participant);
+        return res.json({ ok: true });
+      }
+
+      if (action === 'result4') {
+        if (!id) return res.status(400).json({ error: 'Missing id' });
+        const participant = await fbGet(`participants/${id}`);
+        if (!participant) return res.status(404).json({ error: 'Participant not found' });
+        if (!participant.p4results) participant.p4results = {};
+        participant.p4results[taskIndex] = { ...result, completedAt: new Date().toISOString() };
         await fbPut(`participants/${id}`, participant);
         return res.json({ ok: true });
       }
