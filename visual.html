@@ -254,6 +254,39 @@ body.mode-chat .workspace { grid-template-columns: minmax(420px,1fr) 330px 310px
 }
 .complete-btn:hover { opacity: .85; }
 
+/* ── Study popups ── */
+.study-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.82);
+  display: flex; align-items: center; justify-content: center; z-index: 4000;
+}
+.study-box {
+  background: var(--panel); border: 3px solid var(--line);
+  box-shadow: var(--shadow); padding: 32px 40px; max-width: 520px; width: 92%;
+  font-family: ui-monospace, monospace;
+}
+.study-box h2 {
+  font-family: var(--font-pixel); font-size: 11px; color: var(--accent);
+  letter-spacing: 3px; margin: 0 0 20px;
+}
+.study-box h3 {
+  font-family: var(--font-pixel); font-size: 7px; color: var(--accent2);
+  letter-spacing: 2px; margin: 16px 0 8px; text-transform: uppercase;
+}
+.study-box p { color: var(--text); font-size: 15px; margin: 0 0 8px; line-height: 1.5; }
+.study-box ul { color: var(--muted); font-size: 13px; line-height: 1.7; padding-left: 20px; margin: 0 0 8px; }
+.time-note { color: var(--accent3) !important; font-size: 12px !important; }
+.study-btn {
+  display: inline-block; margin-top: 18px; padding: 12px 24px;
+  font-family: var(--font-pixel); font-size: 9px; letter-spacing: 2px;
+  background: var(--accent); color: #140010; border: 2px solid var(--text);
+  cursor: pointer; box-shadow: 4px 4px 0 rgba(0,0,0,.4);
+}
+.study-btn:hover { opacity: .88; }
+#popupLevel {
+  font-family: var(--font-pixel); font-size: 7px;
+  color: var(--accent); letter-spacing: 2px; margin-bottom: 8px;
+}
+
 /* ── HUD ── */
 #visualHud {
   position: fixed; bottom: 16px; left: 16px; z-index: 500;
@@ -296,7 +329,7 @@ body.mode-chat .workspace { grid-template-columns: minmax(420px,1fr) 330px 310px
     <h2>PART 3 COMPLETE!</h2>
     <p>You've finished the visual AI-level tasks.</p>
     <p style="font-size:17px;color:var(--muted)">Part 4 restricts the design space itself — you'll use the AI assistant but with fewer controls available.</p>
-    <button class="complete-btn" onclick="startP4()">▶ START PART 4</button>
+    <button class="study-btn" onclick="startP4()">▶ START PART 4</button>
     <div class="complete-pid">PARTICIPANT ID: <span id="p3CompletePid">—</span></div>
   </div>
 </div>
@@ -342,10 +375,6 @@ body.mode-chat .workspace { grid-template-columns: minmax(420px,1fr) 330px 310px
         <span id="taskTimer">03:00</span>
         <small>remaining</small>
       </div>
-    </div>
-    <div class="task-actions">
-      <button id="startTaskBtn" class="primary">▶ Start Task</button>
-      <button id="finishTaskBtn" disabled>✓ Finish Task</button>
     </div>
   </div>
 
@@ -484,6 +513,27 @@ const P4_TASKS = [
 
 const TASK_DURATION_SECONDS = 180;
 
+const P3_LEVEL_NAMES = {
+  manual: 'LEVEL 1 — MANUAL ONLY',
+  preset: 'LEVEL 2 — PRESETS + MANUAL',
+  chat:   'LEVEL 3 — AI ASSISTANT',
+};
+const P3_LEVEL_TOOLS = {
+  manual: ['Manual sliders only — craft your sprite from scratch', 'Shape selector: silhouette type, symmetry, size', 'Full parameter sliders available'],
+  preset: ['Preset buttons — generate a base sprite type', 'Mutate and Randomize — explore variations', 'Manual sliders to refine any parameter'],
+  chat:   ['AI assistant — describe the sprite you want in plain English', 'Manual sliders to refine the result', 'Iterate back and forth with the AI'],
+};
+const P4_PARAM_SET_NAMES = {
+  full:    'FULL CONTROLS',
+  reduced: 'REDUCED CONTROLS',
+  minimal: 'MINIMAL CONTROLS',
+};
+const P4_PARAM_SET_TOOLS = {
+  full:    ['All 14 parameter sliders available', 'AI assistant active', 'Full shape and symmetry controls'],
+  reduced: ['Core sliders: Fill, Complexity, Outline, Palette, Contrast, Brightness, Saturation', 'Advanced effects hidden (Jitter, Dither, Highlight, Shadow, Detail, Glow)', 'AI assistant active'],
+  minimal: ['Fill Ratio and Palette Hue only', 'All other sliders hidden', 'AI assistant active'],
+};
+
 // ── Study state ───────────────────────────────────────────────────────────────
 let pid = null;
 let participantData = null;
@@ -524,8 +574,6 @@ const controls = {
   taskTitle:         document.getElementById('taskTitle'),
   taskPrompt:        document.getElementById('taskPrompt'),
   taskTimer:         document.getElementById('taskTimer'),
-  startTaskBtn:      document.getElementById('startTaskBtn'),
-  finishTaskBtn:     document.getElementById('finishTaskBtn'),
 };
 
 const sliderDefs = [
@@ -675,23 +723,6 @@ function loadCurrentTask() {
   taskStartTime = null;
   taskTimeLeft  = TASK_DURATION_SECONDS;
 
-  controls.startTaskBtn.disabled  = false;
-  controls.finishTaskBtn.disabled = true;
-
-  if (isP4) {
-    setStudyMode('chat', true);
-    setParamSet(task.paramSet);
-    const noteMap = {
-      full:    '<strong>Part 4 · Full Controls:</strong> All sliders and the AI assistant are available.',
-      reduced: '<strong>Part 4 · Reduced Controls:</strong> Core sliders are available. Advanced effect controls are hidden. AI assistant is active.',
-      minimal: '<strong>Part 4 · Minimal Controls:</strong> Only Fill Ratio and Palette Hue are adjustable. AI assistant is active.',
-    };
-    controls.studyNote.innerHTML = noteMap[task.paramSet] || noteMap.full;
-    controls.conditionLabel.textContent = `${task.paramSet.charAt(0).toUpperCase() + task.paramSet.slice(1)} controls + AI assistant`;
-  } else {
-    setStudyMode(task.level);
-  }
-
   resetSpriteForTask();
   setWorkspaceEnabled(false);
 
@@ -699,16 +730,65 @@ function loadCurrentTask() {
   document.getElementById('hudStep').textContent  = hudLabel;
   document.getElementById('hudTimer').textContent = formatTime(TASK_DURATION_SECONDS);
   document.getElementById('hudTimer').className   = 'hud-timer';
+
+  showPopup();
 }
 
-function startCurrentTask() {
-  if (taskStarted) return;
+function showPopup() {
+  const isP4 = visualPart === 2;
+  if (!isP4) {
+    const task = p3Tasks[p3step];
+    const levelKey = task.level;
+    document.getElementById('popupStep').textContent  = `PART 3 — TASK ${p3step+1} OF 3`;
+    document.getElementById('popupTask').textContent  = task.prompt;
+    document.getElementById('popupLevel').textContent = P3_LEVEL_NAMES[levelKey];
+    document.getElementById('popupParamNote').style.display = 'none';
+    const ul = document.getElementById('popupTools');
+    ul.innerHTML = '';
+    (P3_LEVEL_TOOLS[levelKey] || []).forEach(t => {
+      const li = document.createElement('li'); li.textContent = t; ul.appendChild(li);
+    });
+  } else {
+    const task = p4Tasks[p4step];
+    const ps = task.paramSet;
+    document.getElementById('popupStep').textContent  = `PART 4 — TASK ${p4step+1} OF 3`;
+    document.getElementById('popupTask').textContent  = task.prompt;
+    document.getElementById('popupLevel').textContent = 'LEVEL 3 — AI ASSISTANT';
+    const note = document.getElementById('popupParamNote');
+    note.textContent = `Parameter set: ${P4_PARAM_SET_NAMES[ps]}`;
+    note.style.display = 'block';
+    const ul = document.getElementById('popupTools');
+    ul.innerHTML = '';
+    (P4_PARAM_SET_TOOLS[ps] || []).forEach(t => {
+      const li = document.createElement('li'); li.textContent = t; ul.appendChild(li);
+    });
+  }
+  document.getElementById('studyPopup').style.display = 'flex';
+}
+
+function startTask() {
+  document.getElementById('studyPopup').style.display = 'none';
+
+  const isP4 = visualPart === 2;
+  const task  = isP4 ? p4Tasks[p4step] : p3Tasks[p3step];
+
+  if (isP4) {
+    setStudyMode('chat', true);
+    setParamSet(task.paramSet);
+    const noteMap = {
+      full:    '<strong>Part 4 · Full Controls:</strong> All sliders and the AI assistant are available.',
+      reduced: '<strong>Part 4 · Reduced Controls:</strong> Core sliders are available. Advanced effects hidden. AI assistant active.',
+      minimal: '<strong>Part 4 · Minimal Controls:</strong> Only Fill Ratio and Palette Hue adjustable. AI assistant active.',
+    };
+    controls.studyNote.innerHTML = noteMap[task.paramSet] || noteMap.full;
+    controls.conditionLabel.textContent = `${task.paramSet.charAt(0).toUpperCase()+task.paramSet.slice(1)} controls + AI assistant`;
+  } else {
+    setStudyMode(task.level);
+  }
+
   taskStarted   = true;
   taskStartTime = Date.now();
   taskTimeLeft  = TASK_DURATION_SECONDS;
-
-  controls.startTaskBtn.disabled  = true;
-  controls.finishTaskBtn.disabled = false;
 
   clearInterval(taskTimerInterval);
   taskTimerInterval = setInterval(() => {
@@ -726,21 +806,29 @@ function startCurrentTask() {
       hudEl.className = 'hud-timer warning';
     }
 
-    if (taskTimeLeft <= 0) finishCurrentTask(true);
+    if (taskTimeLeft <= 0) finishTask(true);
   }, 1000);
 
   setWorkspaceEnabled(true);
   refreshUndoAiButton();
 }
 
-async function finishCurrentTask(autoSubmitted=false) {
-  if (!taskStarted && !autoSubmitted) return;
+async function finishTask(timedOut=false) {
+  if (!taskStarted && !timedOut) return;
   clearInterval(taskTimerInterval);
 
   const isP4 = visualPart === 2;
-  const task = isP4 ? p4Tasks[p4step] : p3Tasks[p3step];
+  const task  = isP4 ? p4Tasks[p4step] : p3Tasks[p3step];
   const stepNum = isP4 ? p4step : p3step;
   const elapsedSeconds = taskStartTime ? Math.round((Date.now()-taskStartTime)/1000) : 0;
+
+  // Capture PNG with grid off
+  const wasGrid = controls.gridToggle.checked;
+  controls.gridToggle.checked = false;
+  drawGrid(currentGrid);
+  const spritePngBase64 = canvas.toDataURL('image/png');
+  controls.gridToggle.checked = wasGrid;
+  drawGrid(currentGrid);
 
   const result = {
     taskIndex: stepNum,
@@ -749,13 +837,14 @@ async function finishCurrentTask(autoSubmitted=false) {
     mode:      isP4 ? 'chat' : task.level,
     paramSet:  isP4 ? task.paramSet : undefined,
     prompt:    task.prompt,
-    autoSubmitted,
+    timedOut,
     elapsedSeconds,
     remainingSeconds: Math.max(0, taskTimeLeft),
     finalParams:          structuredCloneSafe(params),
     pixelOverrides:       structuredCloneSafe(pixelOverrides),
     manualPixelEditCount: Object.keys(pixelOverrides).length,
     aiUndoCountForTask,
+    spritePngBase64,
   };
 
   setWorkspaceEnabled(false);
@@ -773,27 +862,34 @@ async function finishCurrentTask(autoSubmitted=false) {
     });
   } catch(e) {}
 
-  if (isP4) {
-    p4step++;
-    if (p4step >= 3) {
-      showStudyComplete();
-    } else {
-      loadCurrentTask();
-    }
-  } else {
+  // Show done modal
+  const partLabel = isP4 ? 'P4' : 'P3';
+  document.getElementById('doneStep').textContent = `${partLabel} TASK ${stepNum+1} COMPLETE`;
+  document.getElementById('doneSpritePreview').src = spritePngBase64;
+  const isLastTask = isP4 ? (p4step >= 2) : (p3step >= 2);
+  document.getElementById('doneNextBtn').textContent = isLastTask
+    ? (isP4 ? '✓ FINISH STUDY' : '▶ CONTINUE TO PART 4')
+    : '▶ NEXT TASK';
+  document.getElementById('taskDoneModal').style.display = 'flex';
+}
+
+function nextTask() {
+  document.getElementById('taskDoneModal').style.display = 'none';
+  if (visualPart === 1) {
     p3step++;
-    if (p3step >= 3) {
-      showP3Complete();
-    } else {
-      loadCurrentTask();
-    }
+    if (p3step >= 3) { showP3Complete(); return; }
+    loadCurrentTask();
+  } else {
+    p4step++;
+    if (p4step >= 3) { showStudyComplete(); return; }
+    loadCurrentTask();
   }
 }
 
 function submitEarlyVisual() {
   if (!confirm('Submit your current sprite and end this task early?')) return;
   clearInterval(taskTimerInterval);
-  finishCurrentTask(false);
+  finishTask(false);
 }
 
 function showP3Complete() {
@@ -1023,8 +1119,6 @@ function setWorkspaceEnabled(enabled) {
     if(el.id==='jsonOutput') return;
     el.disabled=!enabled;
   });
-  controls.startTaskBtn.disabled=enabled;
-  controls.finishTaskBtn.disabled=!enabled;
   refreshUndoAiButton();
 }
 
@@ -1194,13 +1288,38 @@ controls.pixelPaintColor.addEventListener('input',()=>{ eraserMode=false; contro
 controls.clearPixelEditsBtn.addEventListener('click',clearPixelOverrides);
 controls.spriteSize.addEventListener('input',()=>{ resetManualPixelEdits(); render(); });
 [controls.symmetry,controls.silhouetteType,controls.gridToggle].forEach(el=>el.addEventListener('input',render));
-controls.startTaskBtn.addEventListener('click',startCurrentTask);
-controls.finishTaskBtn.addEventListener('click',()=>finishCurrentTask(false));
 if(controls.undoAiEditBtn) controls.undoAiEditBtn.addEventListener('click',undoLastAiEdit);
 controls.chatForm.addEventListener('submit',e=>{ e.preventDefault(); const t=controls.chatInput.value.trim(); if(!t) return; controls.chatInput.value=''; handleChatRequest(t); });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 boot();
 </script>
+
+<!-- ── Task start popup ────────────────────────────────────────────────────── -->
+<div class="study-overlay" id="studyPopup" style="display:none">
+  <div class="study-box">
+    <h2 id="popupStep">P3 — TASK 1 OF 3</h2>
+    <h3>YOUR TASK</h3>
+    <p id="popupTask"></p>
+    <h3>YOUR TOOLS</h3>
+    <p id="popupLevel"></p>
+    <ul id="popupTools"></ul>
+    <p id="popupParamNote" style="display:none;color:var(--accent2);font-size:12px"></p>
+    <p class="time-note">⏱ You have 3 minutes. Your sprite locks when time runs out.</p>
+    <button class="study-btn" onclick="startTask()">▶ START TASK</button>
+  </div>
+</div>
+
+<!-- ── Task done popup ─────────────────────────────────────────────────────── -->
+<div class="study-overlay" id="taskDoneModal" style="display:none">
+  <div class="study-box" style="text-align:center">
+    <h2 id="doneStep">TASK 1 COMPLETE</h2>
+    <img id="doneSpritePreview" alt="your sprite"
+         style="image-rendering:pixelated;width:96px;height:96px;border:3px solid var(--line);margin:16px auto;display:block" />
+    <p style="color:var(--accent2);font-size:20px;margin:8px 0">✓ Sprite saved</p>
+    <button class="study-btn" id="doneNextBtn" onclick="nextTask()">▶ NEXT TASK</button>
+  </div>
+</div>
+
 </body>
 </html>
