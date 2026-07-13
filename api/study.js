@@ -1,4 +1,4 @@
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'sfx-admin';
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'pl-lab';
 const DB = process.env.FIREBASE_DB_URL; // e.g. https://your-project-default-rtdb.firebaseio.com
 
 async function fbGet(path) {
