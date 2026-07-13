@@ -20,10 +20,12 @@ function normalize(p) {
   if (!p) return null;
   const r  = p.results   || {};
   const r2 = p.p2results || {};
+  const r3 = p.p3results || {};
   return {
     ...p,
     results:   [r[0]  || null, r[1]  || null, r[2]  || null],
     p2results: [r2[0] || null, r2[1] || null, r2[2] || null],
+    p3results: [r3[0]||null, r3[1]||null, r3[2]||null, r3[3]||null, r3[4]||null, r3[5]||null],
   };
 }
 
@@ -46,6 +48,16 @@ function generateP2Assignments() {
   const tasks     = shuffle([0, 1, 2]);
   const paramSets = shuffle(['full', 'reduced', 'minimal']);
   return tasks.map((task, i) => ({ task, paramSet: paramSets[i] }));
+}
+
+async function generateP3Assignments() {
+  let counter = await fbGet('p3counter') || { A: 0, B: 0, C: 0 };
+  const minVal = Math.min(counter.A, counter.B, counter.C);
+  const least  = ['A', 'B', 'C'].filter(o => counter[o] === minVal);
+  const order  = least[Math.floor(Math.random() * least.length)];
+  counter[order] = (counter[order] || 0) + 1;
+  await fbPut('p3counter', counter);
+  return { order };
 }
 
 module.exports = async function handler(req, res) {
@@ -72,21 +84,29 @@ module.exports = async function handler(req, res) {
         if (!id) return res.status(400).json({ error: 'Missing id' });
         const existing = await fbGet(`participants/${id}`);
         if (existing) {
-          // Backfill p2assignments for participants created before Part 2 was added
+          let dirty = false;
           if (!existing.p2assignments) {
             existing.p2assignments = generateP2Assignments();
             existing.p2results = existing.p2results || {};
-            await fbPut(`participants/${id}`, existing);
+            dirty = true;
           }
+          if (!existing.p3assignments) {
+            existing.p3assignments = await generateP3Assignments();
+            existing.p3results = existing.p3results || {};
+            dirty = true;
+          }
+          if (dirty) await fbPut(`participants/${id}`, existing);
           return res.json(normalize(existing));
         }
         const participant = {
           id,
           createdAt: new Date().toISOString(),
           assignments:   generateAssignments(),
-          results:       {},  // keyed object avoids Firebase null-stripping
+          results:       {},
           p2assignments: generateP2Assignments(),
           p2results:     {},
+          p3assignments: await generateP3Assignments(),
+          p3results:     {},
         };
         await fbPut(`participants/${id}`, participant);
         return res.json(normalize(participant));
@@ -108,6 +128,16 @@ module.exports = async function handler(req, res) {
         if (!participant) return res.status(404).json({ error: 'Participant not found' });
         if (!participant.p2results) participant.p2results = {};
         participant.p2results[taskIndex] = { ...result, completedAt: new Date().toISOString() };
+        await fbPut(`participants/${id}`, participant);
+        return res.json({ ok: true });
+      }
+
+      if (action === 'result3') {
+        if (!id) return res.status(400).json({ error: 'Missing id' });
+        const participant = await fbGet(`participants/${id}`);
+        if (!participant) return res.status(404).json({ error: 'Participant not found' });
+        if (!participant.p3results) participant.p3results = {};
+        participant.p3results[taskIndex] = { ...result, completedAt: new Date().toISOString() };
         await fbPut(`participants/${id}`, participant);
         return res.json({ ok: true });
       }

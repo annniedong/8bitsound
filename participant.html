@@ -476,7 +476,7 @@ async function finishTask(timedOut) {
 
     const stepNum = study.p2step + 1;
     document.getElementById('doneStep').textContent    = `P2 TASK ${stepNum} COMPLETE`;
-    document.getElementById('doneNextBtn').textContent = study.p2step >= 2 ? '✓ FINISH STUDY' : '▶ NEXT TASK';
+    document.getElementById('doneNextBtn').textContent = study.p2step >= 2 ? '▶ CONTINUE TO PART 3' : '▶ NEXT TASK';
   }
 
   document.getElementById('taskDoneModal').style.display = 'flex';
@@ -521,6 +521,8 @@ function startP2() {
 function showFinalComplete() {
   document.getElementById('studyHud').style.display      = 'none';
   document.getElementById('completePid').textContent     = study.pid;
+  const btn = document.getElementById('p3Link');
+  if (btn) btn.href = `visual.html?pid=${encodeURIComponent(study.pid)}`;
   document.getElementById('studyComplete').style.display = 'flex';
 }
 
@@ -1210,14 +1212,21 @@ body.study-locked .play-btn { pointer-events: auto !important; opacity: 1 !impor
   </div>
 </div>
 
-<!-- ── Study complete ────────────────────────────────────────────────────────── -->
+<!-- ── Study complete (Parts 1 & 2) — proceed to Part 3 ──────────────────────── -->
 <div class="study-overlay" id="studyComplete" style="display:none">
   <div class="study-box" style="text-align:center">
-    <h2>STUDY COMPLETE!</h2>
-    <p style="font-size:22px;margin:16px 0;">All 6 tasks finished.<br>Thank you!</p>
-    <p style="font-family:var(--font-pixel);font-size:7px;color:var(--color-text-dim);letter-spacing:2px;margin-top:16px;">
+    <h2>PARTS 1 &amp; 2 COMPLETE!</h2>
+    <p style="font-size:22px;margin:16px 0;">All 6 sound tasks done.<br>One more part to go!</p>
+    <h3>PART 3 — VISUAL STUDY</h3>
+    <ul style="text-align:left;margin:12px 0 16px">
+      <li>6 pixel-art design tasks</li>
+      <li>Same 3 modes: manual, presets, AI chat</li>
+      <li>3 minutes per task</li>
+    </ul>
+    <p style="font-family:var(--font-pixel);font-size:7px;color:var(--color-text-dim);letter-spacing:2px;margin-bottom:16px;">
       PARTICIPANT ID: <span id="completePid" style="color:var(--color-accent)"></span>
     </p>
+    <a id="p3Link" href="visual.html" class="study-btn" style="display:inline-block;text-decoration:none;">▶ START PART 3 — VISUAL STUDY</a>
   </div>
 </div>
 

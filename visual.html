@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PixelForge — Part 3 Visual Study</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<style>
+:root {
+  --bg: #0b0811; --bg2: #151020; --panel: #171123; --panel2: #211832;
+  --line: #5f4a84; --text: #fff7ff; --muted: #c9b8de;
+  --accent: #ff4fd8; --accent2: #7cf7d4; --accent3: #ffd166;
+  --danger: #ff6b6b; --shadow: 12px 12px 0 rgba(0,0,0,.42);
+  --canvas: #09070d; --button: #2a1d41; --button-hover: #39275a;
+  /* study HUD vars */
+  --color-accent: #33ff88; --color-info: #55bbff; --color-warning: #ffcc00;
+  --color-surface: #141420; --color-border: #30304a; --color-text: #e8e8f4;
+  --color-text-dim: #9898b8; --color-btn-shadow: #06060e;
+  --font-pixel: 'Press Start 2P', monospace; --font-retro: 'VT323', monospace;
+  --px-shadow: 3px 3px 0 var(--color-btn-shadow);
+}
+html[data-theme="light"] {
+  --bg: #fff4fb; --bg2: #ffffff; --panel: #ffffff; --panel2: #ffe2f5;
+  --line: #ff4fbd; --text: #2a1130; --muted: #7b4a6e;
+  --accent: #ff1493; --accent2: #00aab5; --accent3: #ffb703;
+  --danger: #d62828; --shadow: 10px 10px 0 rgba(255,20,147,.25);
+  --canvas: #fffaff; --button: #fff1fb; --button-hover: #ffd4ef;
+  --color-accent: #c40040; --color-surface: #fffdf6; --color-border: #b8b0a0;
+  --color-text: #18181e; --color-text-dim: #505060; --color-btn-shadow: #9a9284;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100vh;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  color: var(--text);
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px),
+    linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 24%, transparent), transparent 32rem),
+    radial-gradient(circle at bottom right, color-mix(in srgb, var(--accent2) 18%, transparent), transparent 30rem),
+    var(--bg);
+  background-size: 18px 18px, 18px 18px, auto, auto, auto;
+}
+button, select, textarea, input { font: inherit; }
+button, select, input {
+  border: 2px solid var(--line); color: var(--text); background: var(--button);
+  border-radius: 0; padding: 10px 12px; cursor: pointer;
+  box-shadow: 4px 4px 0 rgba(0,0,0,.25);
+}
+button:hover, select:hover { background: var(--button-hover); transform: translate(-1px,-1px); }
+button:active { transform: translate(1px,1px); box-shadow: 2px 2px 0 rgba(0,0,0,.25); }
+button.primary { background: var(--accent); border-color: var(--text); color: #160913; font-weight: 900; }
+html[data-theme="dark"] button.primary { color: #140010; }
+button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.app-shell { max-width: 1540px; margin: 0 auto; padding: 24px; }
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 20px; margin-bottom: 18px; padding: 20px;
+  background: linear-gradient(180deg, var(--panel2), var(--panel));
+  border: 3px solid var(--line); box-shadow: var(--shadow);
+}
+.eyebrow { margin: 0 0 8px; color: var(--accent2); font-size: 12px; text-transform: uppercase; letter-spacing: .12em; font-weight: 900; }
+h1 { margin: 0; font-size: clamp(28px,3.5vw,52px); line-height: .88; letter-spacing: -0.06em; text-shadow: 3px 3px 0 color-mix(in srgb, var(--accent) 70%, transparent); }
+h2 { margin: 0; font-size: 17px; }
+p { color: var(--muted); line-height: 1.5; }
+.subtitle { max-width: 680px; margin: 8px 0 0; }
+.top-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.top-pid {
+  font-family: var(--font-pixel); font-size: 8px; color: var(--accent2);
+  letter-spacing: 2px; padding: 8px 12px; border: 2px solid var(--line);
+  background: var(--panel2); white-space: nowrap;
+}
+.study-note {
+  background: var(--panel); padding: 13px 16px; margin-bottom: 18px;
+  color: var(--muted); border: 2px solid var(--line);
+}
+.study-note strong { color: var(--accent3); }
+.task-card {
+  background: linear-gradient(180deg, var(--panel2), var(--panel));
+  padding: 16px; margin-bottom: 18px; border: 3px solid var(--line); box-shadow: var(--shadow);
+}
+.task-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.task-prompt { margin: 12px 0 14px; font-size: 14px; color: var(--text); }
+.timer-box {
+  border: 2px solid var(--line); background: var(--button);
+  padding: 10px 12px; text-align: center; min-width: 96px; box-shadow: 4px 4px 0 rgba(0,0,0,.25);
+}
+#taskTimer { display: block; font-size: 24px; font-weight: 900; color: var(--accent3); }
+.timer-box small { color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: .08em; }
+.task-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.workspace {
+  display: grid; grid-template-columns: 255px minmax(420px,1fr) 330px;
+  gap: 18px; align-items: start;
+}
+.panel, .canvas-card, .recipe-card {
+  background: linear-gradient(180deg, var(--panel2), var(--panel));
+}
+.panel { padding: 16px; border: 3px solid var(--line); box-shadow: var(--shadow); }
+.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.badge {
+  border: 2px solid var(--line); background: var(--accent3); color: #20110c;
+  padding: 4px 7px; font-size: 10px; font-weight: 900; text-transform: uppercase;
+}
+.badge.stable { background: var(--accent2); }
+.badge.ai { background: var(--accent); color: #160913; }
+.panel-copy { margin: 0 0 14px; font-size: 12px; }
+.preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.preset-grid button.active { outline: 3px solid var(--accent2); background: color-mix(in srgb, var(--accent2) 28%, var(--button)); }
+.assist-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.preview-stage { display: grid; gap: 18px; }
+.canvas-card { padding: 16px; border: 3px solid var(--line); box-shadow: var(--shadow); }
+.canvas-toolbar {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; margin-bottom: 14px; color: var(--text); flex-wrap: wrap;
+}
+.canvas-toolbar small { display: block; color: var(--muted); margin-top: 5px; }
+.toggle { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.toolbar-toggles { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+#spriteCanvas {
+  display: block; width: 100%; max-width: 640px; aspect-ratio: 1/1;
+  margin: 0 auto; border: 3px solid var(--line); background-color: var(--canvas);
+  background-image:
+    linear-gradient(45deg, rgba(128,128,128,.12) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(128,128,128,.12) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(128,128,128,.12) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(128,128,128,.12) 75%);
+  background-size: 28px 28px;
+  background-position: 0 0, 0 14px, 14px -14px, -14px 0;
+  image-rendering: pixelated;
+}
+.paint-toolbar {
+  display: none; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: -2px 0 14px; padding: 10px; border: 2px solid var(--line);
+  background: color-mix(in srgb, var(--canvas) 74%, var(--panel));
+}
+.paint-toolbar.active { display: flex; }
+.paint-label { color: var(--accent3); font-size: 12px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.paint-hint { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.paint-toolbar button { padding: 7px 9px; box-shadow: 3px 3px 0 rgba(0,0,0,.22); }
+#spriteCanvas.painting-enabled { cursor: crosshair; }
+#eraserBtn.active { outline: 3px solid var(--accent3); }
+.pixel-color-picker {
+  display: inline-flex; align-items: center; gap: .45rem;
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+}
+.pixel-color-picker input[type="color"] {
+  width: 34px; height: 28px; padding: 0; border: 2px solid var(--line);
+  background: var(--panel); cursor: pointer; image-rendering: pixelated;
+}
+.recipe-card { padding: 16px; border: 3px solid var(--line); box-shadow: var(--shadow); }
+.recipe-header { display: flex; align-items: start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.recipe-header p { margin: 6px 0 0; font-size: 12px; }
+.recipe-actions { display: flex; gap: 8px; }
+.recipe-actions button { padding: 8px 10px; }
+#jsonOutput {
+  width: 100%; height: 155px; resize: vertical; border-radius: 0;
+  border: 2px solid var(--line); background: color-mix(in srgb, var(--canvas) 86%, var(--panel));
+  color: var(--text); padding: 12px; outline: none; font-size: 12px;
+}
+.controls-panel { padding: 16px; border: 3px solid var(--line); box-shadow: var(--shadow); background: linear-gradient(180deg, var(--panel2), var(--panel)); }
+.controls-panel label {
+  display: block; color: var(--muted); font-size: 12px;
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; font-weight: 800;
+}
+.controls-panel select { width: 100%; margin-top: 7px; }
+.slider-row { margin-bottom: 15px; }
+.slider-row .slider-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 7px; color: var(--muted); font-size: 12px; }
+.slider-row output { color: var(--text); font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; accent-color: var(--accent); box-shadow: none; padding: 0; cursor: pointer; }
+.chat-panel { display: none; padding: 16px; border: 3px solid var(--line); box-shadow: var(--shadow); background: linear-gradient(180deg, var(--panel2), var(--panel)); }
+.chat-log {
+  height: 250px; overflow: auto; border: 2px solid var(--line);
+  background: color-mix(in srgb, var(--canvas) 86%, var(--panel));
+  padding: 10px; display: grid; align-content: start; gap: 10px;
+}
+.chat-msg { padding: 9px 10px; border: 2px solid var(--line); background: var(--button); font-size: 12px; line-height: 1.45; }
+.chat-msg.user { background: color-mix(in srgb, var(--accent) 22%, var(--button)); }
+.chat-msg.assistant { background: color-mix(in srgb, var(--accent2) 18%, var(--button)); }
+.chat-form { display: grid; grid-template-columns: 1fr auto; gap: 9px; margin-top: 10px; }
+.chat-form input { width: 100%; cursor: text; }
+#undoAiEditBtn { width: 100%; margin-top: 10px; }
+body.mode-manual .presets-panel, body.mode-manual .chat-panel { display: none; }
+body.mode-preset .chat-panel { display: none; }
+body.mode-chat .presets-panel { display: none; }
+body.mode-chat .chat-panel { display: block; }
+body.mode-manual .workspace { grid-template-columns: minmax(420px,1fr) 330px; }
+body.mode-chat .workspace { grid-template-columns: minmax(420px,1fr) 330px 310px; }
+@media (max-width: 1280px) {
+  body.mode-chat .workspace { grid-template-columns: minmax(420px,1fr) 330px; }
+  body.mode-chat .chat-panel { grid-column: 1 / -1; }
+}
+@media (max-width: 1060px) {
+  .workspace, body.mode-manual .workspace, body.mode-chat .workspace { grid-template-columns: 1fr; }
+  .topbar { align-items: flex-start; flex-direction: column; }
+  .top-actions { justify-content: flex-start; }
+}
+.disabled-workspace { opacity: .55; filter: grayscale(.25); }
+.disabled-workspace canvas { pointer-events: none; }
+
+/* ── Loading overlay ── */
+#loadingOverlay {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; align-items: center; justify-content: center; z-index: 2000;
+  flex-direction: column; gap: 16px;
+}
+#loadingOverlay p {
+  font-family: var(--font-pixel); font-size: 10px; color: var(--color-accent);
+  letter-spacing: 3px; animation: hudpulse .8s infinite alternate;
+}
+#loadingOverlay .load-error { color: var(--danger); animation: none; font-size: 13px; font-family: monospace; max-width: 500px; text-align: center; }
+@keyframes hudpulse { from { opacity: 1; } to { opacity: .4; } }
+
+/* ── Complete overlay ── */
+#studyComplete {
+  position: fixed; inset: 0; background: rgba(0,0,0,.85);
+  display: none; align-items: center; justify-content: center; z-index: 3000;
+}
+.complete-box {
+  background: var(--panel); border: 3px solid var(--color-accent);
+  box-shadow: var(--shadow); padding: 40px 48px; text-align: center; max-width: 480px;
+}
+.complete-box h2 { font-family: var(--font-pixel); font-size: 14px; color: var(--color-accent); letter-spacing: 3px; margin-bottom: 20px; }
+.complete-box p { font-family: var(--font-retro); font-size: 22px; color: var(--text); margin-bottom: 12px; }
+.complete-pid { font-family: var(--font-pixel); font-size: 8px; color: var(--color-text-dim); letter-spacing: 2px; margin-top: 20px; }
+.complete-pid span { color: var(--color-accent); }
+
+/* ── HUD ── */
+#visualHud {
+  position: fixed; bottom: 16px; left: 16px; z-index: 500;
+  background: var(--color-surface); border: 2px solid var(--color-accent);
+  box-shadow: var(--px-shadow); padding: 10px 12px; min-width: 160px; max-width: 200px;
+}
+.hud-pid { font-family: var(--font-pixel); font-size: 7px; color: var(--color-text-dim); letter-spacing: 1px; margin-bottom: 6px; }
+.hud-pid span { color: var(--color-text); }
+.hud-step { font-family: var(--font-pixel); font-size: 8px; color: var(--color-accent); letter-spacing: 2px; margin-bottom: 2px; }
+.hud-timer { font-family: var(--font-pixel); font-size: 16px; color: var(--color-accent); letter-spacing: 2px; margin-top: 4px; }
+.hud-timer.warning { color: var(--color-warning); }
+.hud-timer.critical { color: var(--danger); animation: hudpulse .5s infinite alternate; }
+.hud-early-btn {
+  display: block; width: 100%; margin-top: 8px; padding: 4px 6px;
+  font-family: var(--font-retro); font-size: 14px;
+  background: var(--panel2); color: var(--color-text-dim);
+  border: 1px solid var(--color-border); cursor: pointer; text-align: center; letter-spacing: .5px;
+}
+.hud-early-btn:hover { color: var(--color-warning); border-color: var(--color-warning); }
+</style>
+</head>
+<body class="mode-manual">
+
+<!-- Loading overlay -->
+<div id="loadingOverlay">
+  <p id="loadingMsg">LOADING PART 3…</p>
+</div>
+
+<!-- HUD -->
+<div id="visualHud" style="display:none">
+  <div class="hud-pid">ID: <span id="hudPid">—</span></div>
+  <div class="hud-step" id="hudStep">P3 — TASK 1/6</div>
+  <div class="hud-timer" id="hudTimer">03:00</div>
+  <button class="hud-early-btn" onclick="submitEarlyVisual()">Submit Early</button>
+</div>
+
+<!-- Study Complete -->
+<div id="studyComplete">
+  <div class="complete-box">
+    <h2>STUDY COMPLETE!</h2>
+    <p>All tasks finished.<br>Thank you for participating!</p>
+    <div class="complete-pid">PARTICIPANT ID: <span id="completePid">—</span></div>
+  </div>
+</div>
+
+<div class="app-shell">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div>
+      <p class="eyebrow">Part 3 · Visual Study</p>
+      <h1>PixelForge</h1>
+      <p class="subtitle">8-bit pixel-art sprite studio</p>
+    </div>
+    <div class="top-actions">
+      <div class="top-pid" id="topPid">PID: —</div>
+      <button id="themeToggle">☾ Dark</button>
+      <button id="exportPngBtn">↓ PNG</button>
+    </div>
+  </div>
+
+  <!-- Study note -->
+  <div class="study-note" id="studyNote">
+    <strong>Loading…</strong>
+  </div>
+
+  <!-- Task card -->
+  <div class="task-card">
+    <div class="task-header">
+      <div>
+        <h2 id="taskTitle">Task 1</h2>
+        <p class="task-prompt" id="taskPrompt">—</p>
+      </div>
+      <div class="timer-box">
+        <span id="taskTimer">03:00</span>
+        <small>remaining</small>
+      </div>
+    </div>
+    <div class="task-actions">
+      <button id="startTaskBtn" class="primary">▶ Start Task</button>
+      <button id="finishTaskBtn" disabled>✓ Finish Task</button>
+    </div>
+  </div>
+
+  <!-- Workspace -->
+  <div class="workspace" id="workspace">
+
+    <!-- Presets panel -->
+    <div class="panel presets-panel">
+      <div class="panel-heading">
+        <h2>Presets</h2>
+        <span class="badge stable">Algorithmic</span>
+      </div>
+      <p class="panel-copy">Generate a base sprite, then refine with sliders.</p>
+      <div class="preset-grid">
+        <button data-preset="coin">Coin</button>
+        <button data-preset="gem">Gem</button>
+        <button data-preset="potion">Potion</button>
+        <button data-preset="sword">Sword</button>
+        <button data-preset="slime">Slime</button>
+        <button data-preset="skull">Skull</button>
+        <button data-preset="tree">Tree</button>
+        <button data-preset="mushroom">Mushroom</button>
+        <button data-preset="star">Star</button>
+        <button data-preset="random">Random</button>
+      </div>
+      <div class="assist-actions">
+        <button id="randomizeBtn">⚄ Randomize</button>
+        <button id="mutateBtn">⟳ Mutate</button>
+      </div>
+    </div>
+
+    <!-- Canvas + recipe -->
+    <div class="preview-stage">
+      <div class="canvas-card">
+        <div class="canvas-toolbar">
+          <div>
+            <strong id="spriteLabel">Manual · 16×16</strong>
+            <small id="conditionLabel">Manual design space only</small>
+          </div>
+          <div class="toolbar-toggles">
+            <label class="toggle"><input type="checkbox" id="gridToggle"> Grid</label>
+            <label class="toggle"><input type="checkbox" id="pixelEditToggle"> Pixel Edit</label>
+          </div>
+        </div>
+        <div class="paint-toolbar" id="paintToolbar">
+          <span class="paint-label">Paint</span>
+          <label class="pixel-color-picker">Color <input type="color" id="pixelPaintColor" value="#ff4fd8"></label>
+          <button id="eraserBtn">Eraser</button>
+          <button id="clearPixelEditsBtn">Clear edits</button>
+          <span class="paint-hint">Click or drag on the canvas to paint pixels.</span>
+        </div>
+        <canvas id="spriteCanvas" width="512" height="512"></canvas>
+      </div>
+
+      <div class="recipe-card">
+        <div class="recipe-header">
+          <div>
+            <h2>Recipe</h2>
+            <p>Live JSON snapshot of the current sprite parameters.</p>
+          </div>
+          <div class="recipe-actions">
+            <button id="copyJsonBtn">⎘ Copy</button>
+            <button id="loadJsonBtn">↑ Load</button>
+          </div>
+        </div>
+        <textarea id="jsonOutput" readonly></textarea>
+      </div>
+    </div>
+
+    <!-- Controls panel -->
+    <div class="controls-panel">
+      <label>
+        Size
+        <select id="spriteSize">
+          <option value="8">8×8</option>
+          <option value="16" selected>16×16</option>
+          <option value="32">32×32</option>
+        </select>
+      </label>
+      <label>
+        Symmetry
+        <select id="symmetry">
+          <option value="vertical" selected>Vertical</option>
+          <option value="horizontal">Horizontal</option>
+          <option value="quad">Quad</option>
+          <option value="none">None</option>
+        </select>
+      </label>
+      <label>
+        Silhouette
+        <select id="silhouetteType">
+          <option value="blob" selected>Blob</option>
+          <option value="round">Round</option>
+          <option value="tall">Tall</option>
+          <option value="wide">Wide</option>
+          <option value="spiky">Spiky</option>
+          <option value="boxy">Boxy</option>
+          <option value="blade">Blade</option>
+          <option value="tree">Tree</option>
+        </select>
+      </label>
+      <div id="sliderControls"></div>
+    </div>
+
+    <!-- Chat panel -->
+    <div class="chat-panel">
+      <div class="panel-heading">
+        <h2>AI Assistant</h2>
+        <span class="badge ai">GPT-4o mini</span>
+      </div>
+      <p class="panel-copy">Describe a visual change and the assistant will adjust the sprite parameters.</p>
+      <div class="chat-log" id="chatLog"></div>
+      <form class="chat-form" id="chatForm">
+        <input type="text" id="chatInput" placeholder="Describe a visual change…" />
+        <button type="submit">▶</button>
+      </form>
+      <button id="undoAiEditBtn" disabled>↩ Undo last AI edit</button>
+    </div>
+
+  </div><!-- /workspace -->
+</div><!-- /app-shell -->
+
+<script>
+// ── Study constants ───────────────────────────────────────────────────────────
+const taskPrompts = [
+  { id:'broken-key',       title:'Broken Magic Key',        prompt:'Create a small pixel-art key that looks magical but slightly broken. It should include at least two colors, an uneven silhouette, and one manually placed detail.' },
+  { id:'character-loot',   title:'Character Loot',          prompt:'Create a piece of loot that a powerful character might drop if defeated in battle. It should feel valuable, include at least two colors, and have a unique silhouette.' },
+  { id:'glitch-creature',  title:'Friendly Glitch Creature', prompt:'Create a tiny creature that feels friendly but glitchy and have a futuristic vibe. It should have at least one face-like feature, one irregular edge, and a color palette that is not plain green slime.' },
+  { id:'ancient-relic',    title:'Ancient Tech Relic',       prompt:'Create an ancient technology relic. It should feel old and mechanical, include a glowing element, and not look like only a gem, sword, or coin.' },
+  { id:'mythical-creature',title:'Mythical Creature',        prompt:'Create a mythical creature that feels otherworldly and powerful. It should include at least two colors, a unique silhouette, and a sense of magic or danger.' },
+  { id:'unique-pet',       title:'Unique Pet',               prompt:'Create a unique pet: if you could have ANY pet (real or mythical or your own creation, what would it be?). It should feel special, include at least two colors, and have a distinctive silhouette.' },
+];
+
+const modeOrders = {
+  A: ['manual','manual','chat','chat','preset','preset'],
+  B: ['chat','chat','preset','preset','manual','manual'],
+  C: ['preset','preset','manual','manual','chat','chat'],
+};
+
+const TASK_DURATION_SECONDS = 180;
+
+// ── Study state ───────────────────────────────────────────────────────────────
+let pid = null;
+let participantData = null;
+let studyTasks = [];
+let currentTaskIndex = 0;
+let taskStarted = false;
+let taskStartTime = null;
+let taskTimeLeft = TASK_DURATION_SECONDS;
+let taskTimerInterval = null;
+
+// ── Sprite state ──────────────────────────────────────────────────────────────
+const canvas = document.getElementById('spriteCanvas');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const controls = {
+  spriteSize:        document.getElementById('spriteSize'),
+  symmetry:          document.getElementById('symmetry'),
+  silhouetteType:    document.getElementById('silhouetteType'),
+  gridToggle:        document.getElementById('gridToggle'),
+  paintToolbar:      document.getElementById('paintToolbar'),
+  pixelEditToggle:   document.getElementById('pixelEditToggle'),
+  pixelPaintColor:   document.getElementById('pixelPaintColor'),
+  eraserBtn:         document.getElementById('eraserBtn'),
+  clearPixelEditsBtn:document.getElementById('clearPixelEditsBtn'),
+  spriteLabel:       document.getElementById('spriteLabel'),
+  conditionLabel:    document.getElementById('conditionLabel'),
+  studyNote:         document.getElementById('studyNote'),
+  jsonOutput:        document.getElementById('jsonOutput'),
+  sliderControls:    document.getElementById('sliderControls'),
+  chatLog:           document.getElementById('chatLog'),
+  chatForm:          document.getElementById('chatForm'),
+  chatInput:         document.getElementById('chatInput'),
+  undoAiEditBtn:     document.getElementById('undoAiEditBtn'),
+  taskTitle:         document.getElementById('taskTitle'),
+  taskPrompt:        document.getElementById('taskPrompt'),
+  taskTimer:         document.getElementById('taskTimer'),
+  startTaskBtn:      document.getElementById('startTaskBtn'),
+  finishTaskBtn:     document.getElementById('finishTaskBtn'),
+};
+
+const sliderDefs = [
+  ['fillRatio','Fill Ratio',0.12,0.88,0.01],['complexity','Complexity',0,1,0.01],
+  ['outline','Outline',0,1,0.01],['pixelJitter','Pixel Jitter',0,1,0.01],
+  ['paletteHue','Palette Hue',0,360,1],['paletteCount','Palette Count',2,6,1],
+  ['contrast','Contrast',0,1,0.01],['brightness','Brightness',0.2,1,0.01],
+  ['saturation','Saturation',0,1,0.01],['ditherAmount','Dither',0,1,0.01],
+  ['highlightStrength','Highlight',0,1,0.01],['shadowStrength','Shadow',0,1,0.01],
+  ['detailDensity','Detail Density',0,1,0.01],['glowAmount','Glow',0,1,0.01],
+];
+
+class VisualParams {
+  constructor(overrides={}) {
+    Object.assign(this, {
+      seed: Math.floor(Math.random()*1000000), preset:'manual', spriteSize:16,
+      category:'manual', symmetry:'vertical', silhouetteType:'blob',
+      fillRatio:0.42, complexity:0.38, outline:0.78, pixelJitter:0.14,
+      paletteHue:318, paletteCount:4, contrast:0.72, brightness:0.82,
+      saturation:0.78, ditherAmount:0.05, highlightStrength:0.52,
+      shadowStrength:0.54, detailDensity:0.34, glowAmount:0.06,
+    }, overrides);
+  }
+  mutate(amount=0.12) {
+    const nudge=(key,min=0,max=1)=>{ this[key]=clamp(this[key]+(Math.random()*2-1)*amount,min,max); };
+    nudge('fillRatio',0.12,0.88); nudge('complexity'); nudge('outline'); nudge('pixelJitter');
+    nudge('contrast'); nudge('brightness',0.2,1); nudge('saturation'); nudge('ditherAmount');
+    nudge('highlightStrength'); nudge('shadowStrength'); nudge('detailDensity'); nudge('glowAmount');
+    this.paletteHue=Math.round((this.paletteHue+Math.random()*36-18+360)%360);
+    this.seed=Math.floor(Math.random()*1000000);
+  }
+}
+
+const presets = {
+  coin:()=>new VisualParams({preset:'coin',category:'item',silhouetteType:'round',symmetry:'quad',fillRatio:.58,complexity:.22,outline:.95,pixelJitter:.03,paletteHue:45,paletteCount:4,contrast:.72,brightness:.92,saturation:.82,ditherAmount:.04,highlightStrength:.7,shadowStrength:.45,detailDensity:.22,glowAmount:.08}),
+  gem:()=>new VisualParams({preset:'gem',category:'item',silhouetteType:'spiky',symmetry:'quad',fillRatio:.47,complexity:.36,outline:.85,pixelJitter:.05,paletteHue:185,paletteCount:5,contrast:.86,brightness:.88,saturation:.9,ditherAmount:.03,highlightStrength:.85,shadowStrength:.65,detailDensity:.4,glowAmount:.25}),
+  potion:()=>new VisualParams({preset:'potion',category:'item',silhouetteType:'tall',symmetry:'vertical',fillRatio:.42,complexity:.42,outline:.9,pixelJitter:.12,paletteHue:282,paletteCount:4,contrast:.72,brightness:.82,saturation:.76,ditherAmount:.06,highlightStrength:.5,shadowStrength:.55,detailDensity:.34,glowAmount:.06}),
+  sword:()=>new VisualParams({preset:'sword',category:'weapon',silhouetteType:'blade',symmetry:'vertical',fillRatio:.31,complexity:.35,outline:.85,pixelJitter:.02,paletteHue:215,paletteCount:4,contrast:.75,brightness:.82,saturation:.35,ditherAmount:.02,highlightStrength:.8,shadowStrength:.7,detailDensity:.33,glowAmount:.02}),
+  slime:()=>new VisualParams({preset:'slime',category:'creature',silhouetteType:'blob',symmetry:'vertical',fillRatio:.48,complexity:.26,outline:.72,pixelJitter:.15,paletteHue:130,paletteCount:4,contrast:.52,brightness:.78,saturation:.82,ditherAmount:.06,highlightStrength:.6,shadowStrength:.36,detailDensity:.25,glowAmount:.04}),
+  skull:()=>new VisualParams({preset:'skull',category:'creature',silhouetteType:'round',symmetry:'vertical',fillRatio:.52,complexity:.42,outline:.9,pixelJitter:.08,paletteHue:38,paletteCount:3,contrast:.7,brightness:.82,saturation:.22,ditherAmount:.09,highlightStrength:.45,shadowStrength:.68,detailDensity:.55,glowAmount:.01}),
+  tree:()=>new VisualParams({preset:'tree',category:'nature',silhouetteType:'tree',symmetry:'vertical',fillRatio:.5,complexity:.5,outline:.8,pixelJitter:.22,paletteHue:108,paletteCount:5,contrast:.64,brightness:.72,saturation:.62,ditherAmount:.12,highlightStrength:.36,shadowStrength:.64,detailDensity:.45,glowAmount:.01}),
+  mushroom:()=>new VisualParams({preset:'mushroom',category:'nature',silhouetteType:'wide',symmetry:'vertical',fillRatio:.45,complexity:.36,outline:.86,pixelJitter:.07,paletteHue:0,paletteCount:4,contrast:.78,brightness:.84,saturation:.75,ditherAmount:.05,highlightStrength:.45,shadowStrength:.56,detailDensity:.52,glowAmount:.02}),
+  star:()=>new VisualParams({preset:'star',category:'icon',silhouetteType:'spiky',symmetry:'quad',fillRatio:.36,complexity:.25,outline:.78,pixelJitter:.02,paletteHue:55,paletteCount:4,contrast:.75,brightness:.95,saturation:.88,ditherAmount:.02,highlightStrength:.75,shadowStrength:.42,detailDensity:.18,glowAmount:.32}),
+  random:()=>{ const keys=Object.keys(presets).filter(k=>k!=='random'); const p=presets[keys[Math.floor(Math.random()*keys.length)]](); p.mutate(.32); p.preset='random'; return p; }
+};
+
+let params = new VisualParams();
+let currentGrid = [];
+let pixelOverrides = {};
+let studyMode = 'manual';
+let eraserMode = false;
+let aiEditHistory = [];
+let aiUndoCountForTask = 0;
+
+// ── Boot: load from Firebase ──────────────────────────────────────────────────
+async function boot() {
+  const urlParams = new URLSearchParams(location.search);
+  pid = urlParams.get('pid') || localStorage.getItem('sfx-study-pid');
+  if (!pid) {
+    showLoadError('No participant ID found. Please go back to the sound study page.');
+    return;
+  }
+  pid = pid.toUpperCase();
+  localStorage.setItem('sfx-study-pid', pid);
+
+  try {
+    const res = await fetch(window.STUDY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'init', id: pid }),
+    });
+    const data = await res.json();
+    if (data.error) { showLoadError('API error: ' + data.error); return; }
+    participantData = data;
+
+    const order = (data.p3assignments || {}).order || 'A';
+    const modes = modeOrders[order] || modeOrders.A;
+    studyTasks = taskPrompts.map((t, i) => ({ ...t, number: i+1, mode: modes[i] }));
+
+    // Resume from first incomplete task
+    const p3results = data.p3results || [];
+    currentTaskIndex = p3results.findIndex(r => r === null);
+    if (currentTaskIndex === -1) {
+      if (p3results.filter(r => r !== null).length >= 6) {
+        showStudyComplete();
+        document.getElementById('loadingOverlay').style.display = 'none';
+        return;
+      }
+      currentTaskIndex = 0;
+    }
+
+    // Init UI
+    document.getElementById('hudPid').textContent = pid;
+    document.getElementById('topPid').textContent = `PID: ${pid}`;
+    document.getElementById('completePid').textContent = pid;
+
+    buildSliders();
+    syncControlsFromParams();
+    loadCurrentTask();
+
+    document.getElementById('loadingOverlay').style.display = 'none';
+    document.getElementById('visualHud').style.display = 'block';
+  } catch (err) {
+    showLoadError('Failed to connect to study server: ' + err.message);
+  }
+}
+
+function showLoadError(msg) {
+  document.getElementById('loadingMsg').textContent = 'ERROR';
+  const errEl = document.createElement('p');
+  errEl.className = 'load-error';
+  errEl.textContent = msg;
+  document.getElementById('loadingOverlay').appendChild(errEl);
+}
+
+// ── Task flow ─────────────────────────────────────────────────────────────────
+function loadCurrentTask() {
+  if (currentTaskIndex >= studyTasks.length) { showStudyComplete(); return; }
+  const task = studyTasks[currentTaskIndex];
+
+  controls.taskTitle.textContent  = `Task ${task.number} · ${task.title}`;
+  controls.taskPrompt.textContent = task.prompt;
+  controls.taskTimer.textContent  = formatTime(TASK_DURATION_SECONDS);
+  controls.taskTimer.className    = '';
+
+  taskStarted   = false;
+  taskStartTime = null;
+  taskTimeLeft  = TASK_DURATION_SECONDS;
+
+  controls.startTaskBtn.disabled  = false;
+  controls.finishTaskBtn.disabled = true;
+
+  setStudyMode(task.mode);
+  resetSpriteForTask();
+  setWorkspaceEnabled(false);
+
+  document.getElementById('hudStep').textContent  = `P3 — TASK ${currentTaskIndex+1}/6`;
+  document.getElementById('hudTimer').textContent = formatTime(TASK_DURATION_SECONDS);
+  document.getElementById('hudTimer').className   = 'hud-timer';
+}
+
+function startCurrentTask() {
+  if (taskStarted) return;
+  taskStarted   = true;
+  taskStartTime = Date.now();
+  taskTimeLeft  = TASK_DURATION_SECONDS;
+
+  controls.startTaskBtn.disabled  = true;
+  controls.finishTaskBtn.disabled = false;
+
+  clearInterval(taskTimerInterval);
+  taskTimerInterval = setInterval(() => {
+    taskTimeLeft -= 1;
+    const fmt = formatTime(taskTimeLeft);
+    controls.taskTimer.textContent = fmt;
+    document.getElementById('hudTimer').textContent = fmt;
+
+    const hudEl = document.getElementById('hudTimer');
+    if (taskTimeLeft <= 10) {
+      controls.taskTimer.style.color = 'var(--danger)';
+      hudEl.className = 'hud-timer critical';
+    } else if (taskTimeLeft <= 30) {
+      controls.taskTimer.style.color = 'var(--accent3)';
+      hudEl.className = 'hud-timer warning';
+    }
+
+    if (taskTimeLeft <= 0) finishCurrentTask(true);
+  }, 1000);
+
+  setWorkspaceEnabled(true);
+  refreshUndoAiButton();
+}
+
+async function finishCurrentTask(autoSubmitted=false) {
+  if (!taskStarted && !autoSubmitted) return;
+  clearInterval(taskTimerInterval);
+
+  const task = studyTasks[currentTaskIndex];
+  const elapsedSeconds = taskStartTime ? Math.round((Date.now()-taskStartTime)/1000) : 0;
+
+  const result = {
+    taskIndex: currentTaskIndex,
+    taskId:    task.id,
+    title:     task.title,
+    mode:      task.mode,
+    prompt:    task.prompt,
+    autoSubmitted,
+    elapsedSeconds,
+    remainingSeconds: Math.max(0, taskTimeLeft),
+    finalParams:          structuredCloneSafe(params),
+    pixelOverrides:       structuredCloneSafe(pixelOverrides),
+    manualPixelEditCount: Object.keys(pixelOverrides).length,
+    aiUndoCountForTask,
+  };
+
+  setWorkspaceEnabled(false);
+
+  try {
+    await fetch(window.STUDY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action:'result3', id:pid, taskIndex:currentTaskIndex, result }),
+    });
+  } catch(e) {}
+
+  currentTaskIndex++;
+  if (currentTaskIndex >= studyTasks.length) {
+    showStudyComplete();
+  } else {
+    loadCurrentTask();
+  }
+}
+
+function submitEarlyVisual() {
+  if (!confirm('Submit your current sprite and end this task early?')) return;
+  clearInterval(taskTimerInterval);
+  finishCurrentTask(false);
+}
+
+function showStudyComplete() {
+  document.getElementById('visualHud').style.display = 'none';
+  document.getElementById('studyComplete').style.display = 'flex';
+}
+
+// ── Mode / UI ─────────────────────────────────────────────────────────────────
+function setStudyMode(mode) {
+  studyMode = mode;
+  document.body.classList.remove('mode-manual','mode-preset','mode-chat');
+  document.body.classList.add(`mode-${mode}`);
+  if (mode === 'manual') {
+    controls.studyNote.innerHTML = '<strong>Level 1 · Manual only:</strong> Use sliders and shape controls to design your sprite. The preset toolbar and chat assistant are hidden.';
+    controls.conditionLabel.textContent = 'Manual design space only';
+  } else if (mode === 'preset') {
+    controls.studyNote.innerHTML = '<strong>Level 2 · Preset assistance:</strong> Generate a base sprite with a preset, then refine with the manual controls.';
+    controls.conditionLabel.textContent = 'Manual controls + algorithmic preset toolbar';
+  } else {
+    controls.studyNote.innerHTML = '<strong>Level 3 · Chat assistance:</strong> Use the chat assistant to describe the sprite you want. The preset toolbar is hidden.';
+    controls.conditionLabel.textContent = 'Manual controls + chat assistant';
+  }
+  syncControlsFromParams();
+  render();
+}
+
+// ── Sprite generation (identical to pixel-forage) ────────────────────────────
+class SpriteGenerator {
+  constructor(p) { this.p = p; }
+  generate() {
+    const size = this.p.spriteSize;
+    const grid = Array.from({length:size},()=>Array.from({length:size},()=>null));
+    this.buildSilhouette(grid); this.addPresetDetails(grid);
+    this.applyShading(grid); this.addOutline(grid); this.cleanup(grid);
+    return grid;
+  }
+  buildSilhouette(grid) {
+    const p=this.p, s=p.spriteSize, cx=(s-1)/2, cy=(s-1)/2;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      const [mx,my]=mirrorCoord(x,y,s,p.symmetry);
+      const nx=(mx-cx)/cx, ny=(my-cy)/cy;
+      const field=silhouetteField(p.silhouetteType,nx,ny,mx,my,s,p.seed);
+      const noise=seededNoise(mx,my,p.seed)*p.pixelJitter;
+      const detail=Math.sin((mx+p.seed)*.9)*Math.sin((my-p.seed)*.7)*p.complexity*.07;
+      if(field+noise+detail>1-p.fillRatio) grid[y][x]={role:'base'};
+    }
+  }
+  addPresetDetails(grid) {
+    const p=this.p, s=p.spriteSize, mid=Math.floor(s/2);
+    if(p.preset==='potion'){drawRect(grid,mid-2,2,4,3,'highlight');drawRect(grid,mid-3,5,6,Math.floor(s*.48),'base');drawRect(grid,mid-4,Math.floor(s*.56),8,3,'shadow');drawPixel(grid,mid-2,Math.floor(s*.52),'highlight');drawPixel(grid,mid+2,Math.floor(s*.62),'detail');}
+    if(p.preset==='sword'){drawLine(grid,mid,2,mid,s-5,'highlight');drawLine(grid,mid-1,3,mid-1,s-6,'base');drawLine(grid,mid+1,3,mid+1,s-6,'shadow');drawRect(grid,mid-5,s-6,11,2,'detail');drawRect(grid,mid-1,s-4,3,3,'shadow');}
+    if(p.preset==='slime'){drawPixel(grid,mid-3,mid,'eye');drawPixel(grid,mid+3,mid,'eye');drawPixel(grid,mid-2,mid+3,'shadow');drawPixel(grid,mid+2,mid+3,'shadow');drawRect(grid,mid-3,mid-4,3,2,'highlight');}
+    if(p.preset==='skull'){drawRect(grid,mid-4,mid-2,3,3,'eye');drawRect(grid,mid+2,mid-2,3,3,'eye');drawPixel(grid,mid,mid+1,'shadow');for(let i=-3;i<=3;i+=2)drawPixel(grid,mid+i,mid+5,'shadow');}
+    if(p.preset==='tree'){drawRect(grid,mid-1,Math.floor(s*.58),3,Math.floor(s*.3),'trunk');scatter(grid,'detail',Math.floor(18*p.detailDensity),p.seed+29);}
+    if(p.preset==='mushroom'){drawRect(grid,mid-2,Math.floor(s*.55),5,Math.floor(s*.32),'trunk');for(let i=0;i<Math.floor(10*p.detailDensity)+2;i++){const x=3+Math.floor(seededNoise(i,9,p.seed)*(s-6));const y=3+Math.floor(seededNoise(i,19,p.seed)*Math.floor(s*.36));drawPixel(grid,x,y,'highlight');}}
+    if(p.preset==='coin'){drawRect(grid,mid-1,4,2,s-8,'highlight');drawRect(grid,mid+2,5,1,s-10,'shadow');}
+    if(p.preset==='gem'){drawLine(grid,mid,2,mid-4,mid,'highlight');drawLine(grid,mid,2,mid+4,mid,'highlight');drawLine(grid,mid-4,mid,mid,s-3,'shadow');drawLine(grid,mid+4,mid,mid,s-3,'shadow');}
+    if(p.preset==='star'){drawPixel(grid,mid,2,'highlight');drawPixel(grid,mid,mid,'highlight');drawPixel(grid,mid-1,mid,'highlight');drawPixel(grid,mid+1,mid,'highlight');}
+    scatter(grid,'detail',Math.floor(p.detailDensity*14),p.seed+300);
+  }
+  applyShading(grid) {
+    const p=this.p,s=p.spriteSize;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      if(!grid[y][x]||grid[y][x].role!=='base') continue;
+      const light=(1-x/s)*.45+(1-y/s)*.55, n=seededNoise(x+21,y+77,p.seed);
+      if(light+n*.2>.72-p.highlightStrength*.25) grid[y][x].role='highlight';
+      else if(light-n*.15<.3+p.shadowStrength*.2) grid[y][x].role='shadow';
+    }
+  }
+  addOutline(grid) {
+    const p=this.p; if(p.outline<.08) return;
+    const s=p.spriteSize, copy=grid.map(r=>r.map(c=>c?{...c}:null));
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      if(copy[y][x]) continue;
+      const touching=[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>copy[y+dy]?.[x+dx]);
+      if(touching&&seededNoise(x,y,p.seed+5)<p.outline) grid[y][x]={role:'outline'};
+    }
+  }
+  cleanup(grid) {
+    const p=this.p,s=p.spriteSize;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      if(!grid[y][x]) continue;
+      const count=[[1,0],[-1,0],[0,1],[0,-1]].filter(([dx,dy])=>grid[y+dy]?.[x+dx]).length;
+      if(count===0&&seededNoise(x,y,p.seed+88)>p.complexity) grid[y][x]=null;
+    }
+  }
+}
+
+function drawGrid(grid) {
+  const s=params.spriteSize, px=canvas.width/s;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(params.glowAmount>.02){
+    ctx.save(); ctx.globalAlpha=params.glowAmount*.45;
+    ctx.shadowColor=paletteColor('highlight'); ctx.shadowBlur=Math.max(6,params.glowAmount*24);
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++){const c=grid[y][x];if(!c)continue;ctx.fillStyle=c.color||paletteColor(c.role);ctx.fillRect(x*px,y*px,px,px);}
+    ctx.restore();
+  }
+  for(let y=0;y<s;y++) for(let x=0;x<s;x++){
+    const c=grid[y][x];
+    if(!c){if(seededNoise(x,y,params.seed+999)<params.ditherAmount*.035){ctx.fillStyle=paletteColor('dither');ctx.fillRect(x*px,y*px,px,px);}continue;}
+    ctx.fillStyle=c.color||paletteColor(c.role); ctx.fillRect(x*px,y*px,px,px);
+  }
+  if(controls.gridToggle.checked){
+    ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--line').trim();
+    ctx.globalAlpha=.22; ctx.lineWidth=1;
+    for(let i=0;i<=s;i++){ctx.beginPath();ctx.moveTo(i*px,0);ctx.lineTo(i*px,canvas.height);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i*px);ctx.lineTo(canvas.width,i*px);ctx.stroke();}
+    ctx.globalAlpha=1;
+  }
+}
+
+function paletteColor(role) {
+  const p=params, h=p.paletteHue, sat=Math.round(p.saturation*100), contrast=p.contrast, baseL=34+p.brightness*25;
+  const colors={
+    outline:`hsl(${h},${Math.max(10,sat*.55)}%,${Math.max(7,baseL-38*contrast)}%)`,
+    shadow:`hsl(${h+8},${sat}%,${Math.max(12,baseL-24*contrast)}%)`,
+    base:`hsl(${h},${sat}%,${baseL}%)`,
+    highlight:`hsl(${h-8},${sat}%,${Math.min(94,baseL+26*contrast)}%)`,
+    detail:`hsl(${h+38},${Math.min(100,sat+15)}%,${Math.min(90,baseL+8)}%)`,
+    eye:`hsl(${(h+210)%360},55%,10%)`,
+    trunk:`hsl(30,55%,${Math.max(22,baseL-16)}%)`,
+    dither:`hsla(${h},${sat*.65}%,${baseL*.7}%,.28)`,
+  };
+  return colors[role]||colors.base;
+}
+
+function buildSliders() {
+  controls.sliderControls.innerHTML='';
+  for(const [key,label,min,max,step] of sliderDefs){
+    const row=document.createElement('div'); row.className='slider-row';
+    row.innerHTML=`<div class="slider-top"><span>${label}</span><output id="${key}Value"></output></div><input type="range" id="${key}" min="${min}" max="${max}" step="${step}" />`;
+    controls.sliderControls.appendChild(row);
+  }
+  for(const [key] of sliderDefs) document.getElementById(key).addEventListener('input', render);
+}
+
+function syncControlsFromParams() {
+  controls.spriteSize.value=params.spriteSize;
+  controls.symmetry.value=params.symmetry;
+  controls.silhouetteType.value=params.silhouetteType;
+  for(const [key] of sliderDefs){
+    const inp=document.getElementById(key); const out=document.getElementById(`${key}Value`);
+    if(!inp) continue;
+    inp.value=params[key]; out.textContent=formatValue(key,params[key]);
+  }
+  document.querySelectorAll('[data-preset]').forEach(btn=>btn.classList.toggle('active',btn.dataset.preset===params.preset));
+}
+
+function syncParamsFromControls() {
+  params.spriteSize=Number(controls.spriteSize.value);
+  params.symmetry=controls.symmetry.value;
+  params.silhouetteType=controls.silhouetteType.value;
+  for(const [key] of sliderDefs){
+    const inp=document.getElementById(key); if(!inp) continue;
+    params[key]=key==='paletteCount'||key==='paletteHue'?Number(inp.value):parseFloat(inp.value);
+    document.getElementById(`${key}Value`).textContent=formatValue(key,params[key]);
+  }
+}
+
+function render() {
+  syncParamsFromControls();
+  const generatedGrid=new SpriteGenerator(params).generate();
+  currentGrid=applyPixelOverrides(generatedGrid);
+  drawGrid(currentGrid);
+  updatePaintToolbar();
+  const editCount=getManualPixelEditCount();
+  controls.spriteLabel.textContent=`${capitalize(params.preset)} · ${params.spriteSize}×${params.spriteSize}`+(editCount?` · ${editCount} manual edits`:'');
+  controls.jsonOutput.value=JSON.stringify({pid,studyMode,params,pixelOverrides},null,2);
+}
+
+function applyPixelOverrides(grid) {
+  const edited=grid.map(r=>r.map(c=>c?{...c}:null));
+  for(const [key,color] of Object.entries(pixelOverrides)){
+    const [x,y]=key.split(',').map(Number);
+    if(!edited[y]||edited[y][x]===undefined) continue;
+    edited[y][x]=color===null?null:{role:'custom',color};
+  }
+  return edited;
+}
+
+function resetSpriteForTask() {
+  params=new VisualParams({preset:'manual',category:'manual',spriteSize:16,symmetry:'vertical',silhouetteType:'blob',seed:Math.floor(Math.random()*1000000)});
+  aiEditHistory=[]; aiUndoCountForTask=0;
+  if(controls.undoAiEditBtn) controls.undoAiEditBtn.disabled=true;
+  resetManualPixelEdits(); syncControlsFromParams(); render();
+}
+
+function resetManualPixelEdits() {
+  pixelOverrides={}; eraserMode=false;
+  controls.eraserBtn.classList.remove('active'); controls.eraserBtn.textContent='Eraser';
+  updatePaintToolbar();
+}
+
+function clearPixelOverrides() { pixelOverrides={}; updatePaintToolbar(); render(); }
+function getManualPixelEditCount() { return Object.keys(pixelOverrides).length; }
+function updatePaintToolbar() {
+  const enabled=controls.pixelEditToggle.checked;
+  controls.paintToolbar.classList.toggle('active',enabled);
+  canvas.classList.toggle('painting-enabled',enabled);
+  const editCount=getManualPixelEditCount();
+  controls.clearPixelEditsBtn.textContent=editCount?`Clear edits (${editCount})`:'Clear edits';
+}
+
+function setWorkspaceEnabled(enabled) {
+  const workspace=document.getElementById('workspace');
+  workspace.classList.toggle('disabled-workspace',!enabled);
+  workspace.querySelectorAll('button,input,select,textarea').forEach(el=>{
+    if(el.id==='jsonOutput') return;
+    el.disabled=!enabled;
+  });
+  controls.startTaskBtn.disabled=enabled;
+  controls.finishTaskBtn.disabled=!enabled;
+  refreshUndoAiButton();
+}
+
+// ── AI chat ───────────────────────────────────────────────────────────────────
+function saveAiUndoSnapshot() {
+  aiEditHistory.push({params:structuredCloneSafe(params),pixelOverrides:structuredCloneSafe(pixelOverrides),timestamp:new Date().toISOString()});
+  refreshUndoAiButton();
+}
+
+function undoLastAiEdit() {
+  const prev=aiEditHistory.pop(); if(!prev){refreshUndoAiButton();return;}
+  params=new VisualParams(prev.params); pixelOverrides=prev.pixelOverrides||{};
+  eraserMode=false; controls.eraserBtn.classList.remove('active'); controls.eraserBtn.textContent='Eraser';
+  aiUndoCountForTask++;
+  syncControlsFromParams(); render(); refreshUndoAiButton();
+  addChatMessage('Undid the last AI edit and restored the previous sprite state.','assistant');
+}
+
+function refreshUndoAiButton() {
+  if(!controls.undoAiEditBtn) return;
+  controls.undoAiEditBtn.disabled=aiEditHistory.length===0||!taskStarted;
+}
+
+async function handleChatRequest(text) {
+  addChatMessage(text,'user');
+  try {
+    addChatMessage('Thinking through a pixel-art edit…','assistant');
+    const response=await fetch(window.PIXEL_API_URL,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({prompt:text,currentParams:params}),
+    });
+    let data={};
+    try { data=await response.json(); } catch(_){}
+    if(!response.ok) throw new Error(data.error||`API error ${response.status}`);
+
+    const safeUpdates=sanitizeParamUpdates(data.updates||{});
+    if(!Object.keys(safeUpdates).length) throw new Error('No usable parameter updates returned.');
+
+    saveAiUndoSnapshot();
+    params=new VisualParams({...params,...safeUpdates,seed:Math.floor(Math.random()*1000000)});
+    syncControlsFromParams(); render();
+
+    const msg=data.message||'Sprite updated.';
+    // replace "Thinking" message
+    const msgs=controls.chatLog.querySelectorAll('.chat-msg.assistant');
+    const lastMsg=msgs[msgs.length-1];
+    if(lastMsg&&lastMsg.textContent.startsWith('Thinking')) lastMsg.textContent=msg;
+    else addChatMessage(msg,'assistant');
+  } catch(err) {
+    console.error(err);
+    const msgs=controls.chatLog.querySelectorAll('.chat-msg.assistant');
+    const lastMsg=msgs[msgs.length-1];
+    if(lastMsg&&lastMsg.textContent.startsWith('Thinking')) lastMsg.textContent=`Could not update sprite: ${err.message}`;
+    else addChatMessage(`Could not update sprite: ${err.message}`,'assistant');
+  }
+}
+
+function sanitizeParamUpdates(updates={}) {
+  const safe={};
+  if(!updates||typeof updates!=='object') return safe;
+  const allowedPresets=['manual','coin','gem','potion','sword','slime','skull','tree','mushroom','star'];
+  const allowedSilhouettes=['blob','round','tall','wide','spiky','boxy','blade','tree'];
+  const allowedSymmetry=['none','vertical','horizontal','quad'];
+  if(allowedPresets.includes(updates.preset)) safe.preset=updates.preset;
+  if(allowedSilhouettes.includes(updates.silhouetteType)) safe.silhouetteType=updates.silhouetteType;
+  if(allowedSymmetry.includes(updates.symmetry)) safe.symmetry=updates.symmetry;
+  const ranges={fillRatio:[0.12,0.88],complexity:[0,1],outline:[0,1],pixelJitter:[0,1],paletteHue:[0,360],paletteCount:[2,6],contrast:[0,1],brightness:[0.2,1],saturation:[0,1],ditherAmount:[0,1],highlightStrength:[0,1],shadowStrength:[0,1],detailDensity:[0,1],glowAmount:[0,1]};
+  for(const [key,[min,max]] of Object.entries(ranges)){
+    if(typeof updates[key]==='number'&&Number.isFinite(updates[key])) safe[key]=Math.max(min,Math.min(max,updates[key]));
+  }
+  if(safe.paletteCount!==undefined) safe.paletteCount=Math.round(safe.paletteCount);
+  if(safe.paletteHue!==undefined) safe.paletteHue=Math.round(safe.paletteHue);
+  return safe;
+}
+
+function addChatMessage(text,role) {
+  const msg=document.createElement('div'); msg.className=`chat-msg ${role}`; msg.textContent=text;
+  controls.chatLog.appendChild(msg); controls.chatLog.scrollTop=controls.chatLog.scrollHeight;
+}
+
+// ── PNG export ────────────────────────────────────────────────────────────────
+function exportPNG() {
+  const wasGrid=controls.gridToggle.checked; controls.gridToggle.checked=false;
+  drawGrid(currentGrid);
+  const link=document.createElement('a');
+  link.download=`pixelforge-${params.preset}-${params.seed}.png`;
+  link.href=canvas.toDataURL('image/png'); link.click();
+  controls.gridToggle.checked=wasGrid; drawGrid(currentGrid);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function silhouetteField(type,nx,ny,x,y,s,seed) {
+  const r=Math.sqrt(nx*nx+ny*ny), angle=Math.atan2(ny,nx);
+  const edgeNoise=(seededNoise(Math.floor(x/2),Math.floor(y/2),seed)-.5)*.18;
+  if(type==='round') return 1-r+edgeNoise;
+  if(type==='tall') return 1-Math.sqrt((nx*1.45)**2+(ny*.78)**2)+edgeNoise;
+  if(type==='wide') return 1-Math.sqrt((nx*.78)**2+(ny*1.45)**2)+edgeNoise;
+  if(type==='spiky') return 1-r+Math.sin(angle*5)*.22+edgeNoise;
+  if(type==='boxy') return 1-Math.max(Math.abs(nx*1.05),Math.abs(ny*1.05))+edgeNoise;
+  if(type==='blade') return 1-Math.abs(nx*6)-Math.max(0,Math.abs(ny)-.75)*1.4+edgeNoise*.35;
+  if(type==='tree'){const canopy=1-Math.sqrt((nx*1.25)**2+((ny+.35)*1.05)**2);const trunk=(Math.abs(nx)<.16&&ny>.1&&ny<.9)?.9:-1;return Math.max(canopy,trunk)+edgeNoise;}
+  return 1-r+Math.sin(angle*3+seed)*.08+edgeNoise;
+}
+function mirrorCoord(x,y,s,symmetry){let mx=x,my=y;if(symmetry==='vertical'||symmetry==='quad')mx=x<s/2?x:s-1-x;if(symmetry==='horizontal'||symmetry==='quad')my=y<s/2?y:s-1-y;return[mx,my];}
+function seededNoise(x,y,seed){const n=Math.sin(x*127.1+y*311.7+seed*.011)*43758.5453123;return n-Math.floor(n);}
+function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+function capitalize(s){return String(s).replace('-',' ').replace(/\b\w/g,c=>c.toUpperCase());}
+function formatValue(key,value){return Number(value).toFixed(key==='paletteCount'||key==='paletteHue'?0:2);}
+function formatTime(s){return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;}
+function structuredCloneSafe(v){return JSON.parse(JSON.stringify(v));}
+function pixelKey(x,y){return `${x},${y}`;}
+function drawPixel(grid,x,y,role){if(grid[y]?.[x]!==undefined)grid[y][x]={role};}
+function drawRect(grid,x,y,w,h,role){for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)drawPixel(grid,xx,yy,role);}
+function drawLine(grid,x0,y0,x1,y1,role){const dx=Math.abs(x1-x0),sx=x0<x1?1:-1,dy=-Math.abs(y1-y0),sy=y0<y1?1:-1;let err=dx+dy;while(true){drawPixel(grid,x0,y0,role);if(x0===x1&&y0===y1)break;const e2=2*err;if(e2>=dy){err+=dy;x0+=sx;}if(e2<=dx){err+=dx;y0+=sy;}}}
+function scatter(grid,role,count,seed){const s=grid.length;for(let i=0;i<count;i++){const x=Math.floor(seededNoise(i,2,seed)*s);const y=Math.floor(seededNoise(i,7,seed)*s);if(grid[y]?.[x])grid[y][x]={role};}}
+
+// ── Paint tools ───────────────────────────────────────────────────────────────
+let isPainting=false, lastPaintedKey=null;
+function paintFromPointer(event) {
+  if(!controls.pixelEditToggle.checked) return;
+  const rect=canvas.getBoundingClientRect(), size=params.spriteSize;
+  const x=Math.floor(((event.clientX-rect.left)/rect.width)*size);
+  const y=Math.floor(((event.clientY-rect.top)/rect.height)*size);
+  if(x<0||y<0||x>=size||y>=size) return;
+  const key=pixelKey(x,y); if(key===lastPaintedKey) return;
+  lastPaintedKey=key;
+  pixelOverrides[key]=eraserMode?null:controls.pixelPaintColor.value;
+  render();
+}
+canvas.addEventListener('pointerdown',e=>{if(!controls.pixelEditToggle.checked)return;e.preventDefault();isPainting=true;lastPaintedKey=null;canvas.setPointerCapture?.(e.pointerId);paintFromPointer(e);});
+canvas.addEventListener('pointermove',e=>{if(!isPainting)return;paintFromPointer(e);});
+window.addEventListener('pointerup',()=>{isPainting=false;lastPaintedKey=null;});
+
+// ── Event listeners ───────────────────────────────────────────────────────────
+document.getElementById('themeToggle').addEventListener('click',()=>{
+  const html=document.documentElement, next=html.dataset.theme==='dark'?'light':'dark';
+  html.dataset.theme=next;
+  document.getElementById('themeToggle').textContent=next==='dark'?'☾ Dark':'☀ Light';
+  drawGrid(currentGrid);
+});
+
+document.querySelectorAll('[data-preset]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    params=presets[btn.dataset.preset](); resetManualPixelEdits(); syncControlsFromParams(); render();
+  });
+});
+
+document.getElementById('randomizeBtn').addEventListener('click',()=>{ params=presets.random(); resetManualPixelEdits(); syncControlsFromParams(); render(); });
+document.getElementById('mutateBtn').addEventListener('click',()=>{ params.mutate(.14); syncControlsFromParams(); render(); });
+document.getElementById('exportPngBtn').addEventListener('click',exportPNG);
+document.getElementById('copyJsonBtn').addEventListener('click',async()=>{ await navigator.clipboard.writeText(controls.jsonOutput.value); });
+document.getElementById('loadJsonBtn').addEventListener('click',()=>{
+  try {
+    const loaded=JSON.parse(controls.jsonOutput.value);
+    const loadedMode=loaded.studyMode; delete loaded.studyMode;
+    const loadedParams=loaded.params||loaded;
+    params=new VisualParams(loadedParams); pixelOverrides=loaded.pixelOverrides||{};
+    syncControlsFromParams();
+    if(loadedMode&&['manual','preset','chat'].includes(loadedMode)) setStudyMode(loadedMode);
+    else render();
+  } catch(err) { alert('JSON could not be loaded. Check for syntax errors.'); }
+});
+
+controls.eraserBtn.addEventListener('click',()=>{ eraserMode=!eraserMode; controls.eraserBtn.classList.toggle('active',eraserMode); controls.eraserBtn.textContent=eraserMode?'Eraser on':'Eraser'; });
+controls.pixelEditToggle.addEventListener('change',()=>{ if(!controls.pixelEditToggle.checked){eraserMode=false;controls.eraserBtn.classList.remove('active');controls.eraserBtn.textContent='Eraser';} updatePaintToolbar(); });
+controls.pixelPaintColor.addEventListener('input',()=>{ eraserMode=false; controls.eraserBtn.classList.remove('active'); controls.eraserBtn.textContent='Eraser'; });
+controls.clearPixelEditsBtn.addEventListener('click',clearPixelOverrides);
+controls.spriteSize.addEventListener('input',()=>{ resetManualPixelEdits(); render(); });
+[controls.symmetry,controls.silhouetteType,controls.gridToggle].forEach(el=>el.addEventListener('input',render));
+controls.startTaskBtn.addEventListener('click',startCurrentTask);
+controls.finishTaskBtn.addEventListener('click',()=>finishCurrentTask(false));
+if(controls.undoAiEditBtn) controls.undoAiEditBtn.addEventListener('click',undoLastAiEdit);
+controls.chatForm.addEventListener('submit',e=>{ e.preventDefault(); const t=controls.chatInput.value.trim(); if(!t) return; controls.chatInput.value=''; handleChatRequest(t); });
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+boot();
+</script>
+</body>
+</html>
