@@ -306,6 +306,20 @@ body.mode-chat .workspace { grid-template-columns: minmax(420px,1fr) 330px 310px
   border: 1px solid var(--color-border); cursor: pointer; text-align: center; letter-spacing: .5px;
 }
 .hud-early-btn:hover { color: var(--color-warning); border-color: var(--color-warning); }
+
+/* ── Final survey ── */
+.survey-box { max-width: 660px; width: 94%; max-height: 88vh; overflow-y: auto; margin: 20px auto; }
+.survey-question { margin-bottom: 16px; }
+.survey-question label { display: block; color: var(--text); font-size: 13px; line-height: 1.4; margin-bottom: 7px; }
+.survey-scale-row { display: flex; align-items: center; gap: 10px; }
+.survey-scale-row input[type="range"] { flex: 1; accent-color: var(--accent); box-shadow: none; padding: 0; }
+.survey-endpoint { font-size: 11px; color: var(--muted); width: 14px; text-align: center; flex-shrink: 0; }
+.survey-scale-row output { min-width: 26px; text-align: center; font-weight: 900; color: var(--accent2); font-size: 14px; flex-shrink: 0; }
+#surveyComments {
+  width: 100%; margin-top: 4px; padding: 10px; resize: vertical;
+  background: color-mix(in srgb, var(--canvas) 86%, var(--panel));
+  border: 2px solid var(--line); color: var(--text); font-size: 13px;
+}
 </style>
 </head>
 <body class="mode-manual">
@@ -340,6 +354,26 @@ body.mode-chat .workspace { grid-template-columns: minmax(420px,1fr) 330px 310px
     <h2>STUDY COMPLETE!</h2>
     <p>All tasks finished.<br>Thank you for participating!</p>
     <div class="complete-pid">PARTICIPANT ID: <span id="completePid">—</span></div>
+  </div>
+</div>
+
+<!-- Final Survey -->
+<div id="surveyOverlay" class="study-overlay" style="display:none; align-items:flex-start; overflow-y:auto; padding:30px 16px;">
+  <div class="study-box survey-box">
+    <h2>FINAL SURVEY</h2>
+    <p>You're done with the creative tasks! Please answer a few quick questions about your experience. Each item is rated from 1 (not at all) to 10 (extremely).</p>
+
+    <h3>🔊 Creating the Audio</h3>
+    <div id="audioSurveyQuestions"></div>
+
+    <h3>🎨 Creating the Pixel Art</h3>
+    <div id="visualSurveyQuestions"></div>
+
+    <h3>Any Additional Thoughts?</h3>
+    <p style="font-size:13px;">Do you have any additional insights you would like to share about your experience? Any insights would be greatly appreciated!</p>
+    <textarea id="surveyComments" rows="4" placeholder="Optional…"></textarea>
+
+    <button class="study-btn" id="submitSurveyBtn" onclick="submitSurvey()">▶ SUBMIT &amp; FINISH</button>
   </div>
 </div>
 
@@ -534,6 +568,34 @@ const P4_PARAM_SET_TOOLS = {
   minimal: ['Fill Ratio and Palette Hue only', 'All other sliders hidden', 'AI assistant active'],
 };
 
+// ── Final survey ─────────────────────────────────────────────────────────────
+const AUDIO_SURVEY_QUESTIONS = [
+  'How much did the final sound feel like your own creation?',
+  'How much control did you feel you had over the final sound?',
+  'How closely did the final sound match your original creative intention?',
+  'How much did your own decisions shape the final sound?',
+  'How much did the AI or system shape the final sound?',
+  'How well did the AI or system understand what you wanted?',
+  'How much did the AI or system help you express your ideas?',
+  'How satisfied are you with the final sound?',
+  'How mentally demanding was the audio creation process?',
+  'How frustrated did you feel during the audio creation process?',
+  'How likely would you be to describe yourself as the main author of the final sound?',
+];
+const VISUAL_SURVEY_QUESTIONS = [
+  'How much did the final image feel like your own creation?',
+  'How much control did you feel you had over the final image?',
+  'How closely did the final image match your original creative intention?',
+  'How much did your own decisions shape the final image?',
+  'How much did the AI or system shape the final image?',
+  'How well did the AI or system understand what you wanted?',
+  'How much did the AI or system help you express your ideas?',
+  'How satisfied are you with the final image?',
+  'How mentally demanding was the visual creation process?',
+  'How frustrated did you feel during the visual creation process?',
+  'How likely would you be to describe yourself as the author of the final image?',
+];
+
 // ── Study state ───────────────────────────────────────────────────────────────
 let pid = null;
 let participantData = null;
@@ -662,8 +724,12 @@ async function boot() {
     const p4done = p4results.filter(r => r !== null).length;
 
     if (p3done >= 3 && p4done >= 3) {
-      showStudyComplete();
       document.getElementById('loadingOverlay').style.display = 'none';
+      if (data.survey) {
+        showStudyComplete();
+      } else {
+        showSurvey();
+      }
       return;
     }
 
@@ -881,7 +947,7 @@ function nextTask() {
     loadCurrentTask();
   } else {
     p4step++;
-    if (p4step >= 3) { showStudyComplete(); return; }
+    if (p4step >= 3) { showSurvey(); return; }
     loadCurrentTask();
   }
 }
@@ -908,7 +974,66 @@ function startP4() {
 function showStudyComplete() {
   document.getElementById('visualHud').style.display = 'none';
   document.getElementById('p3Complete').style.display = 'none';
+  document.getElementById('surveyOverlay').style.display = 'none';
   document.getElementById('studyComplete').style.display = 'flex';
+}
+
+function buildSurveyQuestions(containerId, prefix, questions) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  questions.forEach((q, i) => {
+    const id = `${prefix}_${i + 1}`;
+    const wrap = document.createElement('div');
+    wrap.className = 'survey-question';
+    wrap.innerHTML = `
+      <label for="${id}">${i + 1}. ${q}</label>
+      <div class="survey-scale-row">
+        <span class="survey-endpoint">1</span>
+        <input type="range" min="1" max="10" step="1" value="5" id="${id}" />
+        <span class="survey-endpoint">10</span>
+        <output id="${id}_out">5</output>
+      </div>`;
+    container.appendChild(wrap);
+  });
+  container.querySelectorAll('input[type="range"]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      document.getElementById(inp.id + '_out').textContent = inp.value;
+    });
+  });
+}
+
+function showSurvey() {
+  document.getElementById('visualHud').style.display = 'none';
+  document.getElementById('p3Complete').style.display = 'none';
+  buildSurveyQuestions('audioSurveyQuestions', 'audio', AUDIO_SURVEY_QUESTIONS);
+  buildSurveyQuestions('visualSurveyQuestions', 'visual', VISUAL_SURVEY_QUESTIONS);
+  document.getElementById('surveyOverlay').style.display = 'flex';
+}
+
+async function submitSurvey() {
+  const btn = document.getElementById('submitSurveyBtn');
+  btn.disabled = true;
+  btn.textContent = 'SUBMITTING…';
+
+  const audio = {};
+  AUDIO_SURVEY_QUESTIONS.forEach((q, i) => {
+    audio[`q${i + 1}`] = { question: q, rating: Number(document.getElementById(`audio_${i + 1}`).value) };
+  });
+  const visual = {};
+  VISUAL_SURVEY_QUESTIONS.forEach((q, i) => {
+    visual[`q${i + 1}`] = { question: q, rating: Number(document.getElementById(`visual_${i + 1}`).value) };
+  });
+  const comments = document.getElementById('surveyComments').value.trim();
+
+  try {
+    await fetch(window.STUDY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'survey', id: pid, result: { audio, visual, comments } }),
+    });
+  } catch (e) {}
+
+  showStudyComplete();
 }
 
 function setParamSet(ps) {

@@ -157,6 +157,15 @@ module.exports = async function handler(req, res) {
         return res.json({ ok: true });
       }
 
+      if (action === 'survey') {
+        if (!id) return res.status(400).json({ error: 'Missing id' });
+        const participant = await fbGet(`participants/${id}`);
+        if (!participant) return res.status(404).json({ error: 'Participant not found' });
+        participant.survey = { ...result, completedAt: new Date().toISOString() };
+        await fbPut(`participants/${id}`, participant);
+        return res.json({ ok: true });
+      }
+
       if (action === 'result4') {
         if (!id) return res.status(400).json({ error: 'Missing id' });
         const participant = await fbGet(`participants/${id}`);

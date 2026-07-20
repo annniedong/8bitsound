@@ -110,8 +110,9 @@ function renderTable() {
     const p2done = (p.p2results || []).filter(r => r !== null).length;
     const p3done = (p.p3results || []).filter(r => r !== null).length;
     const p4done = (p.p4results || []).filter(r => r !== null).length;
-    const allDone = p1done >= 3 && p2done >= 3 && p3done >= 3 && p4done >= 3;
-    const status = allDone ? 'Done' : `P1:${p1done}/3 P2:${p2done}/3 P3:${p3done}/3 P4:${p4done}/3`;
+    const surveyDone = !!p.survey;
+    const allDone = p1done >= 3 && p2done >= 3 && p3done >= 3 && p4done >= 3 && surveyDone;
+    const status = allDone ? 'Done' : `P1:${p1done}/3 P2:${p2done}/3 P3:${p3done}/3 P4:${p4done}/3 SVY:${surveyDone ? '✓' : '✗'}`;
     const tr = document.createElement('tr');
     tr.className = 'data-row' + (expandedPid === p.id ? ' expanded' : '');
     tr.onclick = () => toggleExpand(p.id);
@@ -145,6 +146,7 @@ function renderTable() {
       const check = r4 ? '<span class="check">✓</span>' : '<span class="dash">—</span>';
       cells += `<td>${label}<br>${check}</td>`;
     }
+    cells += `<td class="status-cell ${surveyDone ? 'done' : ''}">${surveyDone ? '<span class="check">✓</span>' : '<span class="dash">—</span>'}</td>`;
     cells += `<td class="status-cell ${allDone ? 'done' : ''}">${status}</td>`;
     tr.innerHTML = cells;
     tbody.appendChild(tr);
@@ -240,8 +242,33 @@ function renderDetail(p) {
     html += '</div>';
   }
 
+  html += `<div class="detail-task-header" style="margin:16px 0 8px;color:var(--color-info)">— FINAL SURVEY —</div>`;
+  if (p.survey) {
+    html += `<div class="detail-task">`;
+    html += `<div class="detail-row-info">Completed: ${new Date(p.survey.completedAt).toLocaleString()}</div>`;
+    html += `<div class="detail-task-header" style="margin-top:10px">Audio</div>`;
+    Object.values(p.survey.audio || {}).forEach((q, i) => {
+      html += `<div class="detail-row-info">${i + 1}. ${escapeHtml(q.question)} — <strong style="color:var(--color-accent)">${q.rating}/10</strong></div>`;
+    });
+    html += `<div class="detail-task-header" style="margin-top:10px">Pixel Art</div>`;
+    Object.values(p.survey.visual || {}).forEach((q, i) => {
+      html += `<div class="detail-row-info">${i + 1}. ${escapeHtml(q.question)} — <strong style="color:var(--color-accent)">${q.rating}/10</strong></div>`;
+    });
+    if (p.survey.comments) {
+      html += `<div class="detail-task-header" style="margin-top:10px">Additional Comments</div>`;
+      html += `<div class="detail-row-info" style="white-space:pre-wrap">${escapeHtml(p.survey.comments)}</div>`;
+    }
+    html += '</div>';
+  } else {
+    html += `<div class="detail-row-info" style="color:var(--color-text-dim)">Not yet completed.</div>`;
+  }
+
   html += '</div>';
   return html;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 }
 
 function toggleExpand(pid) {
@@ -670,6 +697,7 @@ tr.detail-row td { padding: 0; background: var(--color-surface-2); border-bottom
             <th>P4 TASK 1</th>
             <th>P4 TASK 2</th>
             <th>P4 TASK 3</th>
+            <th>SURVEY</th>
             <th>STATUS</th>
           </tr>
         </thead>
